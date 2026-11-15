@@ -7,6 +7,7 @@ import com.devuloopers.knet.application.contract.traffic.TrafficSource
 import com.devuloopers.knet.application.usecase.device.*
 import com.devuloopers.knet.identity.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.test.*
 import kotlin.test.*
@@ -45,12 +46,18 @@ class DeviceWorkspaceViewModelTest {
             runCurrent()
             assertEquals(sourceA, viewModel.state.value.source)
             assertEquals(listOf(a.id, b.id), viewModel.state.value.devices.map { it.device.id })
+            val navigationUpdates = mutableListOf<DeviceWorkspaceState>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.navigationState.collect { navigationUpdates += it } }
+            val beforeSamples = navigationUpdates.size
             viewModel.setMonitoring(true); viewModel.setMonitoring(true); runCurrent()
             assertEquals(1, reads)
             advanceTimeBy(1_000); runCurrent()
             assertEquals(2, reads)
             assertEquals(2_000_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+            advanceTimeBy(60_000); runCurrent()
+            assertEquals(beforeSamples, navigationUpdates.size, "Throughput must not invalidate shell navigation")
             viewModel.select(sourceB); runCurrent()
+            assertEquals(beforeSamples + 1, navigationUpdates.size)
             assertEquals(0, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
             presence.presence.value = mapOf(a.id to DevicePresence(DevicePresenceStatus.CONNECTED, "run", 0))
             runCurrent()

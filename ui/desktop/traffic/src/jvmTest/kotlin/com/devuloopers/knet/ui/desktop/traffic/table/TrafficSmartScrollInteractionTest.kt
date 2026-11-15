@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.platform.testTag
 import com.devuloopers.knet.ui.core.foundation.motion.KNetMotion
@@ -46,8 +47,14 @@ class TrafficSmartScrollInteractionTest {
             // Semantic Home navigation targets the first item explicitly rather than depending on
             // an animated pixel scroll settling within a fixed number of headless render frames.
             assertTrue(scene.verticalList().config[SemanticsActions.ScrollToIndex].action!!.invoke(0))
-            repeat(24) { if (!state.reading.value.atTop) scene.frameAfter(100) }
-            assertTrue(state.reading.value.atTop)
+            // Semantics scrolling and snapshot observers can resume on separate dispatchers. Pump the
+            // scene until the observed condition holds, allowing actual dispatcher time under a full build.
+            val deadline = System.nanoTime() + 2_000_000_000L
+            while (!state.reading.value.atTop && System.nanoTime() < deadline) {
+                scene.frameAfter(16)
+                Thread.sleep(1)
+            }
+            assertTrue(state.reading.value.atTop, "Home did not settle: position=${scene.verticalList().config[SemanticsProperties.VerticalScrollAxisRange].value()}, visible=${state.visible.value}")
             assertTrue(state.settings.value.follows(state.reading.value))
         }
     }
@@ -222,15 +229,80 @@ class TrafficSmartScrollInteractionTest {
         }
     }
 
+    @Test fun `mouse modifiers select multiple rows and accessibility click returns to ordinary selection`() = EventQueue.invokeAndWait {
+        fixture { scene, state ->
+            fun clickRow(number: Int, modifiers: PointerKeyboardModifiers = PointerKeyboardModifiers()) {
+                val position = scene.nodes().single { it.hasText("/events/$number") }.boundsInRoot.center
+                scene.sendPointerEvent(PointerEventType.Move, position)
+                scene.sendPointerEvent(PointerEventType.Press, position, buttons = PointerButtons(isPrimaryPressed = true), keyboardModifiers = modifiers, button = PointerButton.Primary)
+                scene.sendPointerEvent(PointerEventType.Release, position, keyboardModifiers = modifiers, button = PointerButton.Primary)
+                scene.frames()
+            }
+            clickRow(30)
+            clickRow(28, PointerKeyboardModifiers(isCtrlPressed = true))
+            assertEquals(setOf("row-30", "row-28"), state.selection.value.records.map { (it as com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Exchange).id.value }.toSet())
+            clickRow(26, PointerKeyboardModifiers(isShiftPressed = true))
+            assertEquals(setOf("row-28", "row-27", "row-26"), state.selection.value.records.map { (it as com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Exchange).id.value }.toSet())
+            val position = scene.nodes().single { it.hasText("/events/30") }.boundsInRoot.center
+            val node = scene.nodes().filter { it.config.contains(SemanticsActions.OnClick) && it.boundsInRoot.contains(position) }
+                .minBy { it.boundsInRoot.width * it.boundsInRoot.height }
+            node.config[SemanticsActions.OnClick].action!!.invoke(); scene.frames()
+            assertEquals(1, state.selection.value.records.size)
+        }
+    }
+
+    @Test fun `right click selects request and opaque menu targets before opening and preserves selected groups`() = EventQueue.invokeAndWait {
+        for (opaque in listOf(false, true)) fixture { scene, state ->
+            if (opaque) state.rows.value = state.rows.value.map { row -> if (row.transactionId == "row-27")
+                row.copy(rowKind = TrafficRowKind.OPAQUE_FLOW, method = "TLS tunnel", displayMethod = "TLS tunnel") else row }
+            fun record(number: Int) = state.rows.value.single { it.transactionId == "row-$number" }.recordId
+            state.selection.value = TrafficRowSelection().initialize(record(29)); scene.frames()
+            fun contextClick(number: Int) {
+                val point = scene.nodes().single { it.hasText("/events/$number") }.boundsInRoot.center
+                scene.sendPointerEvent(PointerEventType.Move, point)
+                scene.sendPointerEvent(PointerEventType.Press, point, buttons = PointerButtons(isSecondaryPressed = true), button = PointerButton.Secondary)
+                scene.frames()
+                assertEquals("row-$number", state.selected.value, "Inspector focus must move when the menu opens")
+                scene.sendPointerEvent(PointerEventType.Release, point, button = PointerButton.Secondary); scene.frames()
+            }
+            fun dismiss() { scene.sendKeyEvent(KeyEvent(Key.Escape, KeyEventType.KeyDown)); scene.frames() }
+            contextClick(27)
+            assertEquals(setOf(record(27)), state.selection.value.records)
+            assertTrue(scene.nodes().any { it.hasText("Export this item") })
+            assertEquals(1, state.contextSelections)
+            dismiss()
+            state.selection.value = state.selection.value.select(record(29), TrafficSelectionGesture.TOGGLE, state.rows.value.map { it.recordId })!!
+            val group = state.selection.value
+            scene.frames(); contextClick(29)
+            assertEquals(group, state.selection.value, "Context opening must preserve the selected group and range anchor")
+            assertTrue(scene.nodes().any { it.hasText("Export 2 selected items") })
+            assertEquals(2, state.contextSelections)
+            val parent = scene.nodes().single { it.hasText("Copy (2)") }.boundsInWindow.center
+            scene.sendPointerEvent(PointerEventType.Move, parent); scene.frames()
+            val copy = scene.nodes().single { it.hasText("Full traffic details") }.boundsInWindow.center
+            scene.sendPointerEvent(PointerEventType.Press, copy, buttons = PointerButtons(isPrimaryPressed = true), button = PointerButton.Primary)
+            scene.sendPointerEvent(PointerEventType.Release, copy, button = PointerButton.Primary); scene.frames()
+            assertEquals(group.records, state.copiedDetails.single().toSet())
+            assertTrue(scene.nodes().none { it.hasText("Copy (2)") })
+            contextClick(28)
+            assertEquals(setOf(record(28)), state.selection.value.records)
+            assertTrue(scene.nodes().any { it.hasText("Export this item") })
+            assertEquals(3, state.contextSelections)
+        }
+    }
+
     private class State {
         val rows = mutableStateOf((30 downTo 1).map(::row))
         val selected = mutableStateOf<String?>("row-29")
+        val selection = mutableStateOf(TrafficRowSelection())
         val settings = mutableStateOf(TrafficAutoScrollSettings())
         val reading = mutableStateOf(TrafficReadingState())
         val visible = mutableStateOf(TrafficVisibleRows(emptyList(), false))
         val canLoadNewer = mutableStateOf(false)
         var newerLoads = 0
         var jumps = 0
+        var contextSelections = 0
+        val copiedDetails = mutableListOf<List<com.devuloopers.knet.application.contract.traffic.TrafficRecordId>>()
     }
 
     private fun fixture(motion: Motion = KNetMotion, check: (ImageComposeScene, State) -> Unit) {
@@ -245,6 +317,18 @@ class TrafficSmartScrollInteractionTest {
             }
             TrafficTable(state.rows.value, state.selected.value, state.settings.value.follows(state.reading.value),
                 { state.selected.value = it }, "256 KB", state.rows.value.size.toLong(), modifier = Modifier.weight(1f),
+                onCopyDetails = { records, _ -> state.copiedDetails += records },
+                selection = state.selection.value, selectionActions = TrafficSelectionActions(
+                    select = { id, gesture ->
+                        state.selection.value = state.selection.value.select(id, gesture, state.rows.value.map { it.recordId })!!
+                        state.selected.value = when (id) {
+                            is com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Exchange -> id.id.value
+                            is com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Opaque -> id.id.value
+                        }
+                        if (gesture == TrafficSelectionGesture.CONTEXT) state.contextSelections++
+                    },
+                    selectLoaded = { state.selection.value = TrafficRowSelection(state.rows.value.map { it.recordId }.toSet()) },
+                    clear = { state.selection.value = TrafficRowSelection() }, export = {}),
                 reading = state.reading.value, canLoadNewer = state.canLoadNewer.value, scrollActions = TrafficTableScrollActions(
                     onVisibleRowsChanged = { visible ->
                         state.visible.value = visible

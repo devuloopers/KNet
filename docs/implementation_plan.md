@@ -1,5 +1,268 @@
 # KNet Implementation Plan
 
+## Content-sized Copy button spacing (2026-11-15) [COMPLETED]
+
+Remove the hidden longest-label reservation from the shared split Copy control. Size the primary
+segment to its visible label with normal theme padding, reuse the existing button width animation
+for tab changes, and preserve fixed icon/feedback dimensions. Verify label-to-divider spacing,
+grow/shrink behavior and existing response/menu interactions at standard/Retina density.
+
+The hidden width reservation is removed. All **52 focused UI cases** passed with zero failures/errors/
+skips, including measured label padding, growth/shrink, unchanged feedback bounds and actual response
+menu interactions. Architecture checks, desktop/Android packaging and shared iOS compilation passed.
+All 3,721 checked classes across 23 modules match the desktop package. Evidence:
+`/Users/devuloopers/.codex/verification/knet-copy-spacing-2026-11-15/`.
+
+## API Studio execution Copy menu (2026-11-15) [COMPLETED]
+
+Replace the response icon dropdown with a themed split Copy control and the shared grouped menu.
+Quick copy follows Body/Headers/Cookies; menus expose full exchange/summary, request/response,
+combinations, protocol and developer formats. Freeze the last execution owner rather than mutable
+drafts, read bounded original evidence independently of Traffic capture, preserve incomplete-data
+labels and lifecycle cancellation, and show stable copied/error feedback. Reuse Traffic renderers and
+core popup navigation; verify real recorder snapshots, tab/menu interactions and stale-owner edges.
+
+- [x] Shared themed split control, grouped catalogue and HTTP/native/live toolbar integration.
+- [x] Immutable bounded execution source, shared renderer, real SSE interpretation and decoded gRPC provenance.
+- [x] Focused recorder, ViewModel, rendered-menu/tab and product clipboard integration checks.
+- [x] Final complete workflow gate, desktop/Android packaging and shared iOS compilation.
+
+Qualification passed **2,017 automated tests across 36 outputs**, with zero failures/errors/skips.
+The five new copy suites contain 20 cases, including rendered standard/Retina and narrow/wide tab,
+SSE/native menu, lifecycle and clipboard checks. Architecture validation, desktop/Android packaging
+and shared iOS compilation passed. All **3,721 checked classes across 23 modules** match the desktop
+package, without missing, mismatched or duplicate classes. Native system clipboard interaction remains
+manual; automated product checks use an in-memory Compose clipboard. See
+[`api_studio_copy.md`](api_studio_copy.md). Evidence:
+`/Users/devuloopers/.codex/verification/knet-studio-copy-2026-11-15/`.
+
+## Grouped Traffic Copy presets (2026-11-15) [COMPLETED]
+
+Replace flat Copy actions with a grouped submenu: full/summary, address, request, response, combined,
+contextual GraphQL/WebSocket/gRPC/SSE/opaque details, connection/timings/failure, cURL and structured
+JSON. Every preset resolves the same frozen exact single/group selection and source; unavailable
+items remain explicit. Preserve bounded asynchronous clipboard preparation, body-file leases and stale
+source/owner fencing. Derive menu availability from body-free row metadata, resolve actual evidence
+through application use cases, and add preset, rendered-menu, lifecycle and product integration tests.
+
+All 43 presets are implemented. Application, actual nested-menu/standard/Retina/narrow-window,
+ViewModel, real SSE decoder and product clipboard integration checks passed. The complete workflow
+gate passed 1,997 automated tests across 36 outputs with zero failures/errors/skips. Architecture and
+desktop packaging checks passed. All 3,683 checked classes across 23 modules match the package, without
+missing/mismatched/duplicate classes. Automated product checks use real Room/body files/formatters and
+an in-memory Compose clipboard; native clipboard interaction remains manual. Evidence:
+`/Users/devuloopers/.codex/verification/knet-traffic-copy-presets-2026-11-15/`.
+
+## Structured Traffic Copy details (2026-11-15) [COMPLETED]
+
+Add Copy details / Copy details (N) to row menus. Freeze exact typed selection and source at menu
+creation, resolve canonical records off the UI thread, order them as Traffic, and copy labelled Overview,
+Request/Params/Headers/Body and Response sections with formatted JSON. Include relevant GraphQL, framed
+protocol and opaque connection evidence. Omit empty sections; disclose missing/truncated/binary data.
+Bound metadata, body decoding and total clipboard text, pin body reads against Clear, and cancel stale
+source/owner jobs. Use application use cases, product DI and the modern asynchronous Compose clipboard.
+
+Application/formatter/menu/ViewModel/product integration checks passed, including compression,
+streaming and message ownership edges. The complete workflow gate passed 1,979 automated tests across
+36 outputs with zero failures/errors/skips. Architecture checks and desktop packaging passed. All 3,590
+checked classes across 22 modules match the desktop package, with no missing, mismatched or duplicate
+classes. Product integration uses real Room/body files/formatters and an in-memory Compose clipboard;
+native clipboard interaction remains a manual check. See [`traffic_copy_details.md`](traffic_copy_details.md)
+for layout and bounds. Evidence: `/Users/devuloopers/.codex/verification/knet-traffic-copy-details-2026-11-15/`.
+
+## Group-aware Copy destination visibility (2026-11-15) [COMPLETED]
+
+Hide Copy destination in the context menu for a selected group, keeping it for a single row. Opening
+on an unselected row replaces the group, so its individual Copy destination command remains available.
+Verify request/opaque menus, group export, single-row restoration and rendered standard/Retina popups.
+
+All 206 Traffic cases passed with zero failures/errors/skips. Existing popup checks now cover both
+single and group menus for HTTP/opaque rows at standard/Retina density, alongside exact destination
+copying after returning to a single row or opening on an outsider. Architecture and desktop packaging
+checks passed; packaged classes match the build. Evidence:
+`/Users/devuloopers/.codex/verification/knet-group-copy-destination-2026-11-15/`.
+
+## Import close control and Traffic selection outline (2026-11-15) [COMPLETED]
+
+Remove the duplicate bottom Esc Dismiss/Cancel button while retaining the top-right Close control
+and Escape keyboard handling. Hide the Traffic viewport outline during multi-selection, retaining
+selected-row backgrounds and the existing single-row frame. Verify close/cancel behavior and rendered
+single/multiple/single transitions for HTTP and opaque rows across narrow and wide scroll viewports.
+
+All **206 Traffic cases** passed with zero failures/errors/skips, including rendered mixed HTTP/opaque
+group selection, preserved backgrounds, complete single-row frames before/after horizontal scrolling,
+top-right Close and retained Escape handling. Architecture checks and desktop packaging passed.
+Evidence: `/Users/devuloopers/.codex/verification/knet-import-close-selection-outline-2026-11-15/`.
+
+## Continuous file-import overlay and Traffic cleanup (2026-11-15) [COMPLETED]
+
+Keep one theme-owned in-window surface mounted from drag entry through native handoff, validation,
+record selection and action preparation. Preserve surface identity and bounds, reserve the handoff
+before native drag-end, fence late native callbacks after dismissal, and use this same surface for
+Import. Offer only API Studio, Intercept, Network Conditions and Protected Traffic drafts. Remove
+Open in Traffic, its history viewer/ViewModel/DI/routing/tests and unused body-preview use case; keep
+the bounded parsers and draft preparation. Verify per-frame continuity, exit/Escape/error/cancellation,
+background input blocking, bounded selection and real policy/editor integration.
+
+Qualification passed **1,957 automated cases across 36 complete outputs**, with zero failures/errors/skips.
+The six focused import/overlay suites contain 29 cases, including frame-by-frame surface and heading
+identity/position checks across reservation, native end, parsing, ready and error states. Desktop/Android
+packaging and shared iOS simulator compilation passed. All **3,569 checked classes across 22 desktop
+modules** match the package; explicit archive inspection found zero obsolete viewer/action/table classes.
+Native Finder/picker acceptance remains interactive. No running user app or physical-device UI was driven.
+Evidence: `/Users/devuloopers/.codex/verification/knet-continuous-import-2026-11-15/`.
+
+## Shared import dialog and live file-drop overlay (2026-11-15) [COMPLETED]
+
+The initial shared file/action chooser replaced immediate import-screen navigation and added pre-release
+feedback, bounded validation and typed editor drafts. Its Open in Traffic action and second native dialog
+have been superseded and removed by the continuous-overlay cleanup phase above.
+
+Initial qualification passed 1,958 automated cases across 36 outputs, desktop/Android packaging and shared
+iOS compilation. Initial evidence: `/Users/devuloopers/.codex/verification/knet-capture-drop-dialog-2026-11-15/`.
+See [the current four-action workflow](capture_drop_actions.md) for supported behavior.
+
+## Traffic right-click selects its context row (2026-11-15) [COMPLETED]
+
+Select/focus an unselected Traffic row before showing its menu. Right-clicking a member of an existing
+multi-selection preserves that group and its range anchor while moving inspector focus to the clicked
+row. Add a reusable pre-open menu callback and a typed context-selection gesture; execute it once per
+secondary-button press. Verify actual pointer input, HTTP/opaque rows, export scope and existing menus.
+
+Full shared UI and Traffic suites plus existing app toolbar checks passed, including four new
+model/ViewModel/rendered regressions. Shared iOS simulator compilation passed. Actual pointer tests
+verify selection before menu display, exactly one opening per click, mixed HTTP/opaque groups and
+unchanged group export/range anchors. Evidence:
+`/Users/devuloopers/.codex/verification/knet-context-row-selection-2026-11-15/`.
+
+## Initial Traffic selection participates in export (2026-11-15) [COMPLETED]
+
+Register the initially focused row in the same typed selection used by Export, so startup shows
+Export (1) and exports that exact HTTP or opaque record. Initialize once per source/filter lifecycle;
+preserve selection across arrivals/paging and respect explicit clearing or toggling the last item off.
+Verify startup, empty-to-live transitions, filter/source changes, range anchors and export snapshots.
+
+The full Traffic module and existing app toolbar checks passed, including four new model/ViewModel
+regressions and extended paging/source-restoration assertions. Initial HTTP and opaque selection exports
+the exact typed record immediately, while explicit deselection survives live refresh and device switches.
+Evidence: `/Users/devuloopers/.codex/verification/knet-initial-export-selection-2026-11-15/`.
+
+## Import/export action labels (2026-11-15) [COMPLETED]
+
+Remove literal trailing ellipses from Traffic Import/Export, selected-count and row export actions,
+and the shared API Studio response Export/Save export controls. Retain counts and existing behavior;
+update the current documentation and existing rendered interaction assertions.
+
+All six existing Traffic toolbar/menu and API Studio response-export cases passed. Counts remain
+visible; narrow/resized toolbar access, command routing and stable response button bounds passed.
+Evidence: `/Users/devuloopers/.codex/verification/knet-export-labels-2026-11-15/`.
+
+## Traffic menu action order and feature icons (2026-11-15) [COMPLETED]
+
+Place Export and Copy destination first, followed by a divider and the icon-labelled sidebar feature
+actions: API Studio, Intercepts, Network Conditions and Protected Traffic. Preserve replay eligibility,
+selected export and the existing three protected destination commands. Add optional submenu icons to
+the shared menu component and reuse KNet's shield icon. Verify existing menu interaction/render cases.
+
+All **11 existing menu navigation/render/routing cases** passed, including request and opaque popups at
+standard/Retina density. Desktop packaging and shared iOS simulator compilation passed. All 3,543 checked
+classes across 22 desktop modules match the rebuilt package. Evidence:
+`/Users/devuloopers/.codex/verification/knet-traffic-menu-order-2026-11-15/`.
+
+## Grouped Traffic connection-handling menu (2026-11-15) [COMPLETED]
+
+Replace flat Tunnel/Inspect/Block shortcuts with a shared-theme Protected Traffic submenu, available
+from opaque records and ordinary captured request rows. Remove selection-management menu helpers;
+retain keyboard/modifier selection, context-aware selected export and supported API Studio actions.
+Add typed canonical-record resolution for new destination rules, preserving host/port, authenticated
+workspace, rule replacement and publication fencing. These shortcuts configure future connection
+handling; existing proxy TLS/CONNECT capabilities remain unchanged. Qualify hover/click/keyboard,
+dismissal, popup edge placement, action routing, source isolation and ordinary-request rule persistence.
+The full gate caught a pre-existing follow-up regression from the previous toolbar fix: long operational
+status could displace Clear at minimum width/larger text. Keep capture actions before optional status
+and file actions, bound status width in the design system, and rerun that existing rendered regression.
+
+Qualification passed **1,924 automated cases across 36 complete outputs**, with zero failures/errors/skips.
+Rendered request/opaque menus passed at standard/Retina density; the product integration verifies the same
+commands through real Room persistence and the runtime TLS policy while keeping the other device isolated.
+The minimum-width/larger-text toolbar regression passed. Desktop/Android packaging and shared iOS UI
+compilation passed; all **3,543 checked classes across 22 desktop modules** match the rebuilt package.
+Native interactive acceptance was not repeated. See [menu behavior and qualification](traffic_context_menu.md).
+Evidence: `/Users/devuloopers/.codex/verification/knet-traffic-menu-2026-11-15/`.
+
+
+## Traffic toolbar initial-width clipping (2026-11-15) [COMPLETED]
+
+The shared leading-overflow toolbar subtracted the horizontal scrollbar gutter from the 32-dp control
+row. At initial narrow window sizes this clipped Start/Pause Capture, Clear and file action buttons.
+The theme-owned scrollbar now occupies its own row below full-height controls; trailing controls stay
+aligned to the 32-dp control row. Removed incompatible weights from the capture status inside the
+intrinsically measured scroll lane. Render checks cover initially narrow/wide layout, repeated resizing,
+horizontal access, real Capture/Clear labels and standard/Retina density. All **34 shared UI cases** and **179 Traffic cases** passed with zero failures/errors/skips, including the
+new initial-size/resize render regressions. Desktop packaging passed and the affected module classes match
+the rebuilt package. Existing toolbars without leading overflow retain their original height. Evidence:
+`/Users/devuloopers/.codex/verification/knet-toolbar-height-2026-11-15/`.
+
+
+## Two-device performance and capture workflow follow-up (2026-11-15) [IMPLEMENTED — ACCEPTANCE FOLLOW-UP]
+
+User-authorized sustained two-device testing and measured desktop optimisation, retaining clean architecture,
+Koin/application boundaries, per-device policy isolation and existing capture history. Distinguish controlled
+before/after workloads from samples collected during compilation. Keep devices/Mac awake for active cohorts,
+check presence every two minutes, qualify background/screen-off behavior separately and restore changed settings.
+
+1. **[COMPLETED] Baseline and research:** verify two unique physical devices, existing Companion/control
+   health, idle/load CPU/RAM/GC/socket/latency/throughput measurements and documented external capture formats.
+2. **[COMPLETED] Multi-select export:** stable typed selection with platform additive/range/select-all/clear
+   behavior, explicit selected-count export, frozen IDs/order/source, pagination/arrival/filter/clear edges,
+   native/HAR serializers reused, no silent expansion to unrelated devices or filtered results.
+3. **[COMPLETED — HARDWARE UI ACCEPTANCE PENDING] Companion capture readiness:** report authoritative per-device desktop capture state over the
+   authenticated control boundary; show a clear start-capture dialog when connecting while capture is stopped
+   or paused, update/dismiss on activation/reconnect and never misreport forwarding as recorded traffic.
+4. **[COMPLETED] External capture import:** content-detected HAR interoperability with HTTP Toolkit, Charles
+   and other HAR exporters, plus documented Charles interchange support where faithful decoding is available.
+   Retain originals/availability/timings for draft validation, isolate file metadata from live identities, provide
+   cancellable bounded parsing and explicit unsupported-format/schema/partial-data reporting. The shared
+   action chooser and pre-release drag feedback are covered by the import-dialog phase above.
+5. **[COMPLETED — FULL VPN SOAK RETEST PENDING] Optimisation and qualification:** identify actual bottlenecks, add focused regressions,
+   rerun equivalent workloads and protocol/policy/storage/UI gates, sustained resource/fairness and physical
+   cohorts, package verified outputs and publish measured before/after results plus remaining boundaries.
+
+Final workflow gate passed: 1,903 cases across 36 outputs, zero failures/errors/skips; 14 Apple native
+cases, Android APK, macOS distributable and shared iOS UI compilation passed. All 3,540 checked production
+classes across 22 desktop modules match the package. The original VPN soak exposed unilateral raw-tunnel
+EOF retention exhausting admission after about forty minutes. Bounded idle half-close drain is repaired;
+32 local and 24 physical abandoned lifetimes repeatedly recovered a four-slot budget. Independent physical
+speed/breakpoint checks passed. Short screen-off control presence passed; power settings and task-owned
+fixtures were cleaned/restored. Native UI acceptance and a fresh full-duration VPN soak after restarting
+into the fixed desktop remain. See [executed evidence and boundaries](two_device_capture_workflow_qualification.md).
+
+## Capture file drag-and-drop actions (2026-11-15) [COMPLETED]
+
+Implemented through the continuous import-overlay phase above. Drag entry, accepted native handoff,
+validation, record selection and four editor choices share one surface. Files never become a Traffic source.
+Earlier generated concepts remain visual references; Open in Traffic from those concepts was removed.
+See [the current workflow](capture_drop_actions.md) for ownership, limits and qualification.
+
+## Traffic and API Studio export (2026-11-14) [COMPLETED]
+
+Deliver export only through one shared KNet Capture/HAR workflow. Traffic uses its existing row
+context menu (right-click) plus source/filter export. API Studio places a persistent Export action in
+the response summary toolbar beside Copy/Clear, enabled only for server-response evidence from its
+current execution. Preserve the original sent request through draft edits, independent of Traffic
+capture, and explicitly identify streaming/partial results and format limitations.
+
+Use versioned portable archives, frozen source/execution snapshots, bounded payload reads and
+background atomic file writing with progress/cancellation. Retain per-device grouping and protocol
+evidence without exporting live policy activation, registrations or private credentials. Qualify
+response gating, all supported protocols, privacy transforms, concurrency with Clear/capture, large
+payloads and stable responsive UI. The final gate passed **1,747 tests across 34 complete outputs**,
+zero failures/errors/skips, including 35 new export-specific cases. Architecture/ledger validation and
+desktop packaging passed. A 32 MiB byte-verified archive completed in 950 ms without positive retained
+heap growth after cleanup. Native UI, physical devices and named foreign-tool acceptance remain separate;
+see [the qualification matrix](traffic_export_qualification.md).
+See [the export plan](traffic_api_studio_export_plan.md) for phases, UI placement and acceptance cases.
+
 ## Inspector selection stability audit (2026-11-14) [COMPLETED]
 
 Fix Future connections resetting to Loading/unselected buttons on equivalent TLS row changes. Render

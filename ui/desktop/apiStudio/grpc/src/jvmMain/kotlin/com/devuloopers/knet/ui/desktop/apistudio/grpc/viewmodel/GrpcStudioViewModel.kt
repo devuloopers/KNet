@@ -89,6 +89,7 @@ class GrpcStudioViewModel(
         val current = mutableState.value
         if (documentId != null && documentId == current.documentId) return
         autoSaveJob?.cancel()
+        mutableState.value.exportSession?.release()
         documentLoadJob?.cancel()
         draftRevision++
         documentLoadJob = viewModelScope.launch {
@@ -291,6 +292,7 @@ class GrpcStudioViewModel(
     }
 
     fun execute() {
+        mutableState.value.exportSession?.release()
         val document = createCurrentDocument().getOrElse { error ->
             mutableState.update { it.copy(errorMessage = error.message ?: "The gRPC draft is invalid.") }
             return
@@ -308,6 +310,7 @@ class GrpcStudioViewModel(
                 isExecuting = true,
                 isInteractiveSession = false,
                 isRequestHalfClosed = false,
+                exportSession = null,
                 events = emptyList(),
                 errorMessage = null,
             )
@@ -381,12 +384,14 @@ class GrpcStudioViewModel(
             mutableState.update { it.copy(errorMessage = error.message ?: "Unable to open gRPC stream.") }
             return
         }
+        mutableState.update { it.copy(exportSession = session.exportSession) }
         activeSession = session
         mutableState.update {
             it.copy(
                 isExecuting = true,
                 isInteractiveSession = true,
                 isRequestHalfClosed = false,
+                exportSession = session.exportSession,
                 events = emptyList(),
                 errorMessage = null,
             )
@@ -413,6 +418,7 @@ class GrpcStudioViewModel(
             val events = (current.events + event).takeLast(MAXIMUM_VISIBLE_EVENTS)
             current.copy(
                 events = events,
+                exportSession = (event as? ApiStudioProtocolExecutionEvent.Started)?.exportSession ?: current.exportSession,
                 selectedEventIndex = when (event) {
                     is ApiStudioProtocolExecutionEvent.Message -> events.lastIndex
                     else -> current.selectedEventIndex
@@ -554,6 +560,12 @@ class GrpcStudioViewModel(
         const val MAXIMUM_REFLECTION_DEADLINE_MILLIS = 120_000L
         const val AUTO_SAVE_DEBOUNCE_MILLIS = 300L
     }
+    override fun onCleared() {
+        mutableState.value.exportSession?.release()
+        activeSession?.cancel()
+        super.onCleared()
+    }
+
 }
 
 private fun String.toLongOrDefaultIfBlank(defaultValue: Long): Long? =

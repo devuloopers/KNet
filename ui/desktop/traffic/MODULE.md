@@ -6,6 +6,11 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
 
 ## Owns
 
+- Grouped single/multi-selection Copy presets with body-free contextual eligibility, nested themed menus,
+  shared group capability preparation and exact frozen record/preset commands
+- Single/group Copy details menu commands and a lifecycle/source-fenced copy ViewModel. Preparation
+  stays behind application use cases; modern asynchronous Compose clipboard publication retains no body
+  text in UI state. See `docs/traffic_copy_details.md`.
 - Traffic ViewModel, table/toolbar UI, selection, presentation-owned filters, bounded rolling keyset-page
   window, generic semantic annotation presentation, typed live-interception projection, and lean
   body-free `TrafficRowUiState` values.
@@ -32,6 +37,9 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
   avoiding a redundant terminal divider without removing last-column sizing.
 - Asynchronous breakpoint-draft requests by `ExchangeId`, retaining only the application-prepared canonical
   rule and generic protocol field values while the existing editor is visible.
+- Shared capture-intake state and four editor-draft choices. Import never replaces captured Traffic;
+  the app shell mounts one continuous in-window overlay/drop owner and routes explicitly prepared editor actions. Presentation
+  retains one private file handle, bounded summaries and selected details through application use cases.
 
 ## Does not own
 
@@ -165,6 +173,7 @@ is recorded in `docs/traffic_inspector_redesign.md`.
 Traffic measures and horizontally scrolls headers/rows within the same shared scrollbar gutter. Text and
 selection paint are clipped before the lane, header chrome extends across it, and the horizontal track excludes
 it. The vertical thumb is inset clear of the neighboring splitter target; empty lists do not retain stale chrome.
+The single-row frame is hidden during multi-selection while selected backgrounds remain visible.
 The selected-row frame is painted at the visible content boundary, so horizontal scrolling cannot hide its
 left/right edges. Lazy row positions keep it aligned during vertical scrolling and selection changes.
 See the scrollbar follow-up in `docs/traffic_inspector_redesign.md`.
@@ -177,3 +186,7 @@ The shell routes offline Clear through the same confirmation as tab Close. `clea
 
 Auto scroll behavior, ownership and automated qualification are documented in
 [`docs/traffic_auto_scroll.md`](../../../docs/traffic_auto_scroll.md).
+
+## Capture workflow follow-up
+
+Traffic owns typed additive/range multi-selection and exact selected export. File import uses dedicated application use cases and one app-wide overlay to prepare unsent/unsaved drafts. Traffic has no imported-history state, renderer or alternate source. Background parsing, path access and serialization remain below presentation. See `docs/capture_import.md` and `docs/companion_capture_readiness.md` for behavior and qualification boundaries.

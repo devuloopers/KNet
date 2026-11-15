@@ -16,9 +16,10 @@ class CompanionSessionProtocolTest {
         for (kind in CompanionSessionMessageKind.entries) {
             val message = CompanionSessionMessage(kind, "run_1", 1, if (kind in listOf(
                 CompanionSessionMessageKind.CONFIGURATION, CompanionSessionMessageKind.POLICY_RENEWAL,
-                CompanionSessionMessageKind.POLICY_ACK)) 1 else 0,
+                CompanionSessionMessageKind.POLICY_ACK, CompanionSessionMessageKind.CAPTURE_STATUS)) 1 else 0,
                 configuration = if (kind == CompanionSessionMessageKind.CONFIGURATION) PacketConditionConfiguration(enabled = true, downloadBitsPerSecond = 100_000) else null,
-                acknowledgement = if (kind == CompanionSessionMessageKind.POLICY_ACK) CompanionPolicyAcknowledgement.APPLIED else null)
+                acknowledgement = if (kind == CompanionSessionMessageKind.POLICY_ACK) CompanionPolicyAcknowledgement.APPLIED else null,
+                captureStatus = if (kind == CompanionSessionMessageKind.CAPTURE_STATUS) CompanionDesktopCaptureState.PAUSED else null)
             assertEquals(message, CompanionSessionProtocol.decode(CompanionSessionProtocol.encode(message)))
         }
     }

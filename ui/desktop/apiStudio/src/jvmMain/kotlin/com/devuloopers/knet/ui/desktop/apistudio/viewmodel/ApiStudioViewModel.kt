@@ -513,8 +513,10 @@ class ApiStudioViewModel(
 
     /** Clears the response inspector while retaining the authored request. */
     fun clearResponse() {
+        _uiState.value.exportSession?.release()
         _uiState.update {
-            it.copy(executionState = ExecutionState.IDLE, responseInspection = null, errorMessage = null)
+            it.copy(executionState = ExecutionState.IDLE, responseInspection = null,
+                exportSession = null, errorMessage = null)
         }
     }
 
@@ -560,9 +562,10 @@ class ApiStudioViewModel(
             nameOrigin = _uiState.value.activeDocumentNameOrigin
         )
         flushSnapshot(snapshot())
+        _uiState.value.exportSession?.release()
         val requestExecutionRevision = ++executionRevision
         executionJob?.cancel()
-        _uiState.update { it.copy(executionState = ExecutionState.EXECUTING, errorMessage = null) }
+        _uiState.update { it.copy(executionState = ExecutionState.EXECUTING, exportSession = null, errorMessage = null) }
         val executionTimer = TimeSource.Monotonic.markNow()
 
         executionJob = viewModelScope.launch {
@@ -583,6 +586,7 @@ class ApiStudioViewModel(
                     when (event) {
                         is ApiStudioHttpExecutionEvent.ResponseHead -> {
                             interpreter = responseStreamInterpreters.open(event.value)
+                            _uiState.update { it.copy(exportSession = event.exportSession) }
                             _uiState.update { state ->
                                 state.copy(
                                     responseInspection = ResponseInspectorState(
@@ -612,6 +616,7 @@ class ApiStudioViewModel(
                                 publishLiveUpdates(session, session.finish(), receivedBytes = 0L)
                             }
                             val result = event.value
+                            _uiState.update { it.copy(exportSession = result.exportSession) }
                             if (!result.result.isSuccess) dropMatchingBreakpointsSafely(currentEditor)
                             awaitMinimumLoadingDuration(executionTimer)
                             coroutineContext.ensureActive()
@@ -810,6 +815,7 @@ class ApiStudioViewModel(
         context: SessionContext,
         editorState: RequestEditorState
     ) {
+        _uiState.value.exportSession?.release()
         requestNameRevision++
         requestNameJob?.cancel()
         val documentId = when (context) {
@@ -821,6 +827,7 @@ class ApiStudioViewModel(
             state.copy(
                 editorState = editorState,
                 responseInspection = null,
+                exportSession = null,
                 executionState = ExecutionState.IDLE,
                 errorMessage = null,
                 sessionContext = context,
@@ -1027,4 +1034,10 @@ class ApiStudioViewModel(
             it.copy(persistenceErrorMessage = failure?.message ?: "Request changes could not be saved.")
         }
     }
+    override fun onCleared() {
+        _uiState.value.exportSession?.release()
+        executionJob?.cancel()
+        super.onCleared()
+    }
+
 }

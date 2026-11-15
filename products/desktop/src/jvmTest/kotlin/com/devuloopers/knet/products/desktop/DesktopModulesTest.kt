@@ -95,6 +95,41 @@ class DesktopModulesTest {
         assertTrue(capabilities.get("mobile-companion") == null)
         assertTrue(capabilities.get("vpn") == null)
     }
+
+    @Test
+    fun `export composition resolves with isolated storage and container close retires execution owners`() = kotlinx.coroutines.test.runTest {
+        val root = java.nio.file.Files.createTempDirectory("knet-export-composition-")
+        val application = startKoin {
+            modules(listOf(module { single { DesktopConfiguration(appDirectory = root) } }) + DesktopModules.all)
+        }
+        var database: com.devuloopers.knet.storage.database.KNetDatabase? = null
+        var exportRecorder: com.devuloopers.knet.data.desktop.export.DesktopStudioExportRecorder? = null
+        try {
+            assertNotNull(application.koin.get<com.devuloopers.knet.ui.desktop.httppanel.export.CaptureExportViewModel>())
+            assertNotNull(application.koin.get<com.devuloopers.knet.ui.desktop.traffic.importcapture.CaptureImportDialogViewModel>())
+            database = application.koin.get()
+            exportRecorder = application.koin.get()
+            val recorder = application.koin.get<com.devuloopers.knet.application.contract.export.StudioExportRecorder>()
+            assertTrue(recorder === application.koin.get<com.devuloopers.knet.data.desktop.export.DesktopStudioExportRecorder>())
+            val owner = recorder.http(com.devuloopers.knet.application.contract.export.StudioExportHttpRequest(
+                "https://composition.test/response",
+                com.devuloopers.knet.traffic.model.http.HttpMethod.GET,
+                emptyList(),
+                com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody.None,
+            ))
+            owner.response(com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionResponseHead(
+                200, "OK", mapOf("Content-Type" to "text/event-stream"), emptyMap(), null,
+            ))
+            assertTrue(owner.eligible.value)
+            application.close()
+            assertFalse(owner.eligible.value)
+        } finally {
+            application.close()
+            exportRecorder?.awaitCleanup()
+            database?.close()
+            root.toFile().deleteRecursively()
+        }
+    }
     @Test
     fun `persisted query use cases share capture catalog and container close clears ephemeral sources`() = kotlinx.coroutines.test.runTest {
         val application = startKoin { modules(listOf(module { single { DesktopConfiguration.load() } }) + DesktopModules.all) }

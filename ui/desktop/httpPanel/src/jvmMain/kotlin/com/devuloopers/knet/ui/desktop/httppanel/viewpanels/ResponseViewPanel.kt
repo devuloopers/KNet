@@ -62,6 +62,7 @@ fun ResponseViewPanel(
     onClearResponse: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     showSummaryHeader: Boolean = true,
+    showInlineActions: Boolean = true,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -162,7 +163,7 @@ fun ResponseViewPanel(
                 },
                 headerCount = headerEntries.size,
                 cookieCount = cookieEntries.size,
-                actions = if (!showSummaryHeader) ({
+                actions = if (!showSummaryHeader && showInlineActions) ({
                     ResponseInspectorActions(head, payloadSpec.formattedText, cookieEntries.map { it.key to it.value }, onClearResponse)
                 }) else null,
             )

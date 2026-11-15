@@ -13,6 +13,9 @@ import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import com.devuloopers.knet.engine.proxy.KNetProxyServer
 import com.devuloopers.knet.engine.proxy.capture.*
 import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionPolicy
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionDecision
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionMode
 import com.devuloopers.knet.identity.*
 import com.devuloopers.knet.pairing.*
 import com.devuloopers.knet.traffic.id.ExchangeId
@@ -59,6 +62,70 @@ class CompanionConnectionEofEndToEndTest {
     @Test fun `WebSocket close through the authenticated carrier completes without waiting for timeout`() = upgradedClose(tls = false)
     @Test fun `secure WebSocket close drains nested TLS and the authenticated carrier`() = upgradedClose(tls = true)
 
+    @Test fun `abandoned raw half closes recover both proxy and authenticated admission repeatedly`() {
+        Fixture(tls = false, opaque = true).use { fixture ->
+            repeat(8) { batch ->
+                val clients = (1..4).map { fixture.request() }
+                try {
+                    clients.forEach { client -> client.shutdownOutput() }
+                    clients.forEach { client -> assertEquals(-1, client.inputStream.read()) }
+                    fixture.awaitClosed((batch + 1) * 4)
+                    assertEquals((batch + 1) * 4, fixture.capture.opaqueOutcomes.size)
+                    fixture.capture.opaqueOutcomes.forEach { outcome ->
+                        assertEquals(TrafficTerminationReason.Transport.TUNNEL_HALF_CLOSE_IDLE_TIMEOUT,
+                            assertIs<ExchangeTerminalOutcome.Cancelled>(outcome).reason)
+                    }
+                    // Carrier EOF delivery and its finally/release can run on separate IO workers.
+                    Thread.sleep(30)
+                } finally { clients.forEach(Socket::close) }
+            }
+        }
+    }
+
+    /** Both physical clients repeatedly retire abandoned tunnels through disposable production listeners. */
+    @org.junit.experimental.categories.Category(com.devuloopers.knet.products.desktop.policy.PhysicalDevicePolicyQualification::class)
+    @Test fun physicalAndroidHalfClosedTunnelsReleaseAdmission(): Unit {
+        val apk = checkNotNull(System.getenv("KNET_POLICY_PROBE_APK"))
+        val adb = "/opt/homebrew/bin/adb"
+        val devices = command(adb, "devices").lineSequence().map { it.split(Regex("\\s+")) }
+            .filter { it.size >= 2 && it[1] == "device" }.map { it[0] }.toList().take(2)
+        assertEquals(2, devices.size)
+        devices.forEach { check("tcp:19292" !in command(adb, "-s", it, "reverse", "--list")) }
+        Fixture(tls = false, opaque = true).use { fixture ->
+            val workers = Executors.newFixedThreadPool(2)
+            val evidence = mutableListOf<String>()
+            try {
+                devices.forEach { serial ->
+                    command(adb, "-s", serial, "install", "-r", apk)
+                    command(adb, "-s", serial, "reverse", "tcp:19292", "tcp:${fixture.gatewayPort}")
+                }
+                repeat(12) { batch ->
+                    val probes = devices.map { serial -> workers.submit<String> {
+                        val output = command(adb, "-s", serial, "shell", "am", "instrument", "-w", "-e", "mode", "halfclose",
+                            "-e", "device", "lifecycle-device", "-e", "credential", fixture.probeCredential,
+                            "-e", "certificate", fixture.caBase64, "-e", "originPort", fixture.originPort.toString(),
+                            "com.devuloopers.knet.policyqualifier/com.devuloopers.knet.policyqualifier.Probe")
+                        check("passed=true" in output) { "Half-close probe failed on $serial: $output" }
+                        val elapsed = Regex("elapsedMillis=([0-9]+)").find(output)!!.groupValues[1]
+                        "batch=$batch device=$serial elapsedMillis=$elapsed"
+                    } }
+                    evidence += probes.map { it.get(30, TimeUnit.SECONDS) }
+                    fixture.awaitClosed((batch + 1) * 2)
+                }
+                assertEquals(24, fixture.capture.opaqueOutcomes.size)
+                fixture.capture.opaqueOutcomes.forEach { assertEquals(TrafficTerminationReason.Transport.TUNNEL_HALF_CLOSE_IDLE_TIMEOUT,
+                    assertIs<ExchangeTerminalOutcome.Cancelled>(it).reason) }
+                System.getenv("KNET_HALF_CLOSE_PROBE_REPORT")?.let { java.io.File(it).writeText(evidence.joinToString("\n")) }
+            } finally {
+                workers.shutdownNow()
+                devices.forEach { serial ->
+                    runCatching { command(adb, "-s", serial, "reverse", "--remove", "tcp:19292") }
+                    runCatching { command(adb, "-s", serial, "uninstall", "com.devuloopers.knet.policyqualifier") }
+                }
+            }
+        }
+    }
+
     private fun upgradedClose(tls: Boolean) {
         Fixture(tls, upgraded = true).use { fixture ->
             fixture.request().use { client ->
@@ -97,11 +164,11 @@ class CompanionConnectionEofEndToEndTest {
         }
     }
 
-    private class Fixture(private val tls: Boolean, private val delayed: Boolean = false, private val upgraded: Boolean = false) : AutoCloseable {
+    private class Fixture(private val tls: Boolean, private val delayed: Boolean = false, private val upgraded: Boolean = false, private val opaque: Boolean = false) : AutoCloseable {
         val capture = Capture()
         val requestReceived = CountDownLatch(1)
         val inputEnded = CountDownLatch(1)
-        val respond = CountDownLatch(if (delayed) 1 else 0)
+        val respond = CountDownLatch(if (delayed || opaque) 1 else 0)
         private val authority = CertificateAuthority.generate(commonName = "Connection EOF fixture CA")
         private val contexts = contexts(authority)
         private val cache = CertificateCache()
@@ -115,6 +182,14 @@ class CompanionConnectionEofEndToEndTest {
                 val socket = try { origin.accept() } catch (_: java.net.SocketException) { break }
                 workers.submit {
                     socket.use {
+                        if (opaque) {
+                            check(it.inputStream.read() == 42)
+                            requestReceived.countDown()
+                            check(it.inputStream.read() == -1)
+                            // Model the real peer that consumes FIN but never closes its output.
+                            respond.await(5, TimeUnit.SECONDS)
+                            return@submit
+                        }
                         val requestHead = readHeader(it.inputStream)
                         requestReceived.countDown()
                         check(respond.await(5, TimeUnit.SECONDS))
@@ -142,7 +217,10 @@ class CompanionConnectionEofEndToEndTest {
             },
             verifyUpstreamTls = false, // Only this isolated fixture's self-signed HTTPS origin.
             runtimePolicy = KNetProxyRuntimePolicy(maximumDownstreamConnections = 4, maximumConnectionsPerClient = 4,
-                readIdleTimeoutMillis = 30_000, gracefulShutdownTimeoutMillis = 100),
+                readIdleTimeoutMillis = 30_000, gracefulShutdownTimeoutMillis = 100, rawTunnelHalfCloseIdleTimeoutMillis = if (opaque) 250 else 60_000),
+            tlsInterceptionPolicy = TlsInterceptionPolicy {
+                TlsInterceptionDecision(if (opaque) TlsInterceptionMode.TUNNEL else TlsInterceptionMode.INSPECT)
+            },
             captureSink = capture,
             ingressAttribution = attributions,
             pipelineInitializers = listOf({ pipeline -> pipeline.addLast("observe-eof", object : ChannelInboundHandlerAdapter() {
@@ -154,7 +232,12 @@ class CompanionConnectionEofEndToEndTest {
         ) }
         private val gateway = AuthenticatedProxyGateway("127.0.0.1", 0, contexts.server.serverSocketFactory,
             { proxy.boundAddress() }, PairingCoordinator(DeviceStore(crypto.digest(credential)), crypto, System::currentTimeMillis),
-            attributions).apply { start() }
+            attributions, maximumConnections = if (opaque) 4 else 128).apply { start() }
+
+        val gatewayPort get() = gateway.boundPort!!
+        val originPort get() = origin.localPort
+        val probeCredential get() = credential
+        val caBase64 get() = java.util.Base64.getEncoder().encodeToString(authority.certificate.encoded)
 
         private fun upgradeHeaders() = if (upgraded) "Connection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" else ""
 
@@ -162,6 +245,14 @@ class CompanionConnectionEofEndToEndTest {
             val carrier = contexts.client.socketFactory.createSocket("127.0.0.1", gateway.boundPort!!) as SSLSocket
             carrier.soTimeout = 5_000
             val address = "127.0.0.1:${origin.localPort}"
+            if (opaque) {
+                carrier.outputStream.write(("CONNECT $address HTTP/1.1\r\nHost: $address\r\n" + authorization() + "\r\n").toByteArray())
+                carrier.outputStream.flush()
+                check(readHeader(carrier.inputStream).startsWith("HTTP/1.1 200"))
+                carrier.outputStream.write(42)
+                carrier.outputStream.flush()
+                return carrier
+            }
             if (tls) {
                 carrier.outputStream.write(("CONNECT $address HTTP/1.1\r\nHost: $address\r\n" + authorization() + "\r\n").toByteArray())
                 carrier.outputStream.flush()
@@ -191,8 +282,13 @@ class CompanionConnectionEofEndToEndTest {
     private class Capture : ProxyCaptureSink {
         val closed = AtomicInteger()
         val completed = AtomicInteger()
+        val opaqueOutcomes = CopyOnWriteArrayList<ExchangeTerminalOutcome>()
         override fun openConnection(metadata: ProxyCaptureConnectionMetadata): ProxyConnectionCapture = object : ProxyConnectionCapture {
             override fun close(reason: TrafficTerminationReason?) { closed.incrementAndGet() }
+            override fun startOpaqueFlow(metadata: ProxyOpaqueFlowCaptureMetadata): ProxyOpaqueFlowCapture = object : ProxyOpaqueFlowCapture {
+                override fun observeBytes(direction: TrafficDirection, byteCount: Int, occurredAtEpochMillis: Long) = Unit
+                override fun terminate(outcome: ExchangeTerminalOutcome, occurredAtEpochMillis: Long) { opaqueOutcomes += outcome }
+            }
             override fun startExchange(exchangeId: ExchangeId, request: RequestHead, occurredAtEpochMillis: Long, origin: TrafficOrigin, streamId: StreamId?): ProxyExchangeCapture =
                 object : ProxyExchangeCapture {
                     override val exchangeId = exchangeId
@@ -222,6 +318,13 @@ class CompanionConnectionEofEndToEndTest {
 
     private data class Contexts(val server: SSLContext, val client: SSLContext)
     private companion object {
+        fun command(vararg arguments: String): String {
+            val process = ProcessBuilder(*arguments).redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().readText()
+            check(process.waitFor(30, TimeUnit.SECONDS) && process.exitValue() == 0) { "Qualification subprocess failed: $output" }
+            return output
+        }
+
         /** Retries only an OS port-allocation race and closes every rejected Netty owner. */
         fun startAvailableProxy(factory: (Int) -> KNetProxyServer): KNetProxyServer {
             var lastFailure: java.net.BindException? = null

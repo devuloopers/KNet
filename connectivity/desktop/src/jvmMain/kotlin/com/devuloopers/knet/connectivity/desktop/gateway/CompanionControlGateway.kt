@@ -80,6 +80,7 @@ public class CompanionControlGateway(
     private val maximumConnections: Int = DEFAULT_MAXIMUM_CONNECTIONS,
     private val maximumTrackedChallenges: Int = DEFAULT_MAXIMUM_TRACKED_CHALLENGES,
     private val packetConditionsForDevice: ((com.devuloopers.knet.identity.RegisteredDeviceId) -> PacketConditionConfiguration)? = null,
+    private val captureStatusForDevice: ((RegisteredDeviceId) -> com.devuloopers.knet.companion.model.CompanionDesktopCaptureState)? = null,
 ) : CompanionControlGatewayLifecycle {
     private val running: AtomicBoolean = AtomicBoolean(false)
     private val closed: AtomicBoolean = AtomicBoolean(false)
@@ -199,7 +200,7 @@ public class CompanionControlGateway(
         if (request.body.isNotEmpty()) return response(400, "body_not_allowed")
         val authorization = request.authorization ?: return response(401, "authorization_required")
         val requiredScope = if (
-            request.method == "GET" && request.path == CompanionControlProtocol.NETWORK_CONDITIONS_PATH
+            request.method == "GET" && request.path in setOf(CompanionControlProtocol.NETWORK_CONDITIONS_PATH, CompanionControlProtocol.CAPTURE_STATUS_PATH)
         ) {
             DeviceScope.PROXY_STREAM
         } else {
@@ -214,6 +215,11 @@ public class CompanionControlGateway(
             return response(401, "authorization_rejected")
         }
         return when {
+            request.method == "GET" && request.path == CompanionControlProtocol.CAPTURE_STATUS_PATH -> {
+                val state = captureStatusForDevice?.invoke(authorization.deviceId) ?: return response(404, "capture_status_unsupported")
+                response(200, "OK", CompanionControlProtocol.CAPTURE_STATUS_MEDIA_TYPE,
+                    com.devuloopers.knet.companion.model.CompanionCaptureStatusCodec.encode(state))
+            }
             request.method == "GET" && request.path == CompanionControlProtocol.NETWORK_CONDITIONS_PATH -> {
                 val body = runCatching { PacketConditionConfigurationCodec.encode(packetConditionsForDevice?.invoke(authorization.deviceId) ?: packetConditions()) }
                     .getOrElse { return response(503, "network_conditions_unavailable") }

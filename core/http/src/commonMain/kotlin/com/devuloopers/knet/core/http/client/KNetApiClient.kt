@@ -13,6 +13,8 @@ import com.devuloopers.knet.domain.clientNetwork.decoder.DecodedBodyResult
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionBytes
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpSentRequest
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionBodyChunk
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionEvent
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionResponseHead
@@ -463,6 +465,7 @@ open class KNetApiClient(
         return response.toExecutionResult(
             requestUrl = prepared.url,
             latencyMillis = elapsedTime.elapsedNow().inWholeMilliseconds,
+            retainOriginalBytes = false,
         )
     }
 
@@ -564,7 +567,7 @@ open class KNetApiClient(
                 chunk.copyInto(responseBytes, destinationOffset = offset)
                 offset += chunk.size
             }
-            response.toExecutionResult(url, responseBytes, elapsedTime.elapsedNow().inWholeMilliseconds)
+            response.toExecutionResult(url, responseBytes, elapsedTime.elapsedNow().inWholeMilliseconds, retainOriginalBytes = false)
         }
     }
 
@@ -656,6 +659,8 @@ open class KNetApiClient(
             headers = responseHeadersMap,
             cookies = responseCookiesMap,
             protocol = ApplicationProtocol.fromToken(version.toString()),
+            orderedHeaders = headers.entries().flatMap { entry -> entry.value.map { entry.key to it } },
+            sentRequest = observedRequest(),
         )
     }
 
@@ -663,6 +668,7 @@ open class KNetApiClient(
         requestUrl: String,
         responseBytes: ByteArray,
         latency: Long,
+        retainOriginalBytes: Boolean = true,
     ): ExecutionResult {
         val (responseHeadersMap, responseCookiesMap) = collectHeadersAndCookies(requestUrl, headers)
         val responseHeadersList = responseHeadersMap.map { (name, value) -> name to value }
@@ -673,11 +679,22 @@ open class KNetApiClient(
             headers = responseHeadersMap,
             cookies = responseCookiesMap,
             responseBody = responseText,
+            rawResponse = if (retainOriginalBytes) HttpExecutionBytes(responseBytes) else null,
             responseSizeBytes = responseBytes.size.toLong(),
             isSuccess = status.value in 200..299,
             timings = ExchangeTimings(totalMillis = latency, downloadMillis = latency),
             protocol = ApplicationProtocol.fromToken(version.toString()),
+            orderedHeaders = headers.entries().flatMap { entry -> entry.value.map { entry.key to it } },
+            sentRequest = observedRequest(),
         )
+    }
+
+    private fun HttpResponse.observedRequest(): HttpSentRequest {
+        val sent = call.request
+        val content = sent.content as? io.ktor.http.content.OutgoingContent.ByteArrayContent
+        return HttpSentRequest(sent.url.toString(), sent.method.value,
+            sent.headers.entries().flatMap { entry -> entry.value.map { entry.key to it } },
+            content?.let { HttpExecutionBytes(it.bytes()) })
     }
 
     private fun collectHeadersAndCookies(
@@ -723,6 +740,7 @@ open class KNetApiClient(
     private fun HttpTransportResponse.toExecutionResult(
         requestUrl: String,
         latencyMillis: Long,
+        retainOriginalBytes: Boolean = true,
     ): ExecutionResult {
         val host = runCatching { Url(requestUrl).host }.getOrDefault("")
         val responseHeadersMap = linkedMapOf<String, String>()
@@ -747,10 +765,13 @@ open class KNetApiClient(
             headers = responseHeadersMap,
             cookies = responseCookiesMap,
             responseBody = responseText,
+            rawResponse = if (retainOriginalBytes) HttpExecutionBytes(body) else null,
             responseSizeBytes = body.size.toLong(),
             isSuccess = statusCode in 200..299,
             timings = ExchangeTimings(totalMillis = latencyMillis, downloadMillis = latencyMillis),
             protocol = protocol,
+            orderedHeaders = headers,
+            sentRequest = sentRequest,
         )
     }
 
@@ -774,6 +795,8 @@ open class KNetApiClient(
             headers = responseHeadersMap,
             cookies = responseCookiesMap,
             protocol = protocol,
+            orderedHeaders = headers,
+            sentRequest = sentRequest,
         )
     }
 

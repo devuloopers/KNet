@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="capture_start_title">Start capture in KNet</string>
+    <string name="capture_start_message">Open %1$s on your desktop and press Start Capture. If this device already has a tab, select it first. Then choose Check again here.</string>
+    <string name="capture_paused_title">Desktop capture is not recording</string>
+    <string name="capture_paused_message">Your VPN is connected, but %1$s is forwarding this device’s traffic without recording it. Select this device in KNet desktop and press Start Capture to record requests.</string>
+    <string name="capture_check_again">Check again</string>
+    <string name="capture_notice_understood">Got it</string>
     <string name="app_title">KNet Companion</string>
     <string name="brand_knet">KNet</string>
     <string name="brand_companion">Companion</string>

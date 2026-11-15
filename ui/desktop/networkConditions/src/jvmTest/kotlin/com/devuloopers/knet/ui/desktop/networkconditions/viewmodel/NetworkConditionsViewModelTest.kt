@@ -41,6 +41,8 @@ import com.devuloopers.knet.traffic.model.http.HttpScheme
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -210,6 +212,10 @@ class NetworkConditionsViewModelTest {
 
             protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
+        advanceUntilIdle()
+        var shortcutEmissions = 0
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.quickControlState.collect { shortcutEmissions++ } }
+        val initialEmissions = shortcutEmissions
         viewModel.startRuntimeMonitoring()
         advanceUntilIdle()
 
@@ -227,6 +233,10 @@ class NetworkConditionsViewModelTest {
 
         assertEquals(100_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
         assertEquals(50_000L, viewModel.state.value.throughput.currentUploadBitsPerSecond)
+        assertEquals(initialEmissions, shortcutEmissions, "Telemetry cannot invalidate the Traffic shortcut")
+        viewModel.setEnabled(true); advanceUntilIdle()
+        assertEquals(initialEmissions + 1, shortcutEmissions)
+        assertTrue(viewModel.quickControlState.value.configuration.enabled)
 
         viewModel.stopRuntimeMonitoring()
         telemetry.mutable.value = NetworkConditionRuntimeSnapshot(

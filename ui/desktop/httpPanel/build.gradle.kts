@@ -12,6 +12,9 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":application:desktop"))
+                implementation(libs.androidx.lifecycle.viewmodelCompose)
+                implementation(libs.koin.compose.viewmodel)
+                implementation(libs.kotlinx.coroutines.core)
                 implementation(project(":core:scripting"))
                 implementation(project(":ui:core"))
                 implementation(project(":core:domain"))
@@ -28,6 +31,7 @@ kotlin {
         val jvmTest by getting {
             dependencies {
                 implementation(kotlin("test"))
+                implementation(libs.kotlinx.coroutines.test)
             }
         }
     }

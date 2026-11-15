@@ -13,3 +13,7 @@ subscription timeline occupies the complete result-pane height.
 - Reuses the common API Studio workspace and collection sidebar; it has no GraphQL-specific repository.
 - Does not import proxy, persistence, Netty, Java WebSocket, or GraphQL engine implementations.
 - A blank editor stays transient until the first meaningful edit.
+
+The native response timeline exposes the shared execution Copy split control beside Export. Its menu
+uses the recorded protocol/metadata/message directions and the shell extension slot; layout overflow
+remains owned by `:ui:core`. See `docs/api_studio_copy.md`.

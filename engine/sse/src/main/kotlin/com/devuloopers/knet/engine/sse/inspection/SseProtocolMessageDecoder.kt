@@ -32,6 +32,7 @@ class SseProtocolMessageDecoder(
         return ProtocolMessagePresentation(
             title = title,
             contentType = "text/event-stream",
+            dataText = parsed.data,
             text = input.payload.decodeToString(),
             schemaName = parsed.lastEventId.takeIf(String::isNotEmpty),
             fields = buildList {

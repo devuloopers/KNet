@@ -6,6 +6,11 @@ Owns JVM desktop application use cases, coordinators, and UI-neutral contracts t
 
 ## Owns
 
+- Typed Traffic copy presets and bounded plain-text/JSON/cURL rendering. Metadata-only presets avoid
+  body reads; binary variants preserve captured bytes. Message enrichment uses the existing protocol
+  decoder registry, including optional engine-decoded SSE data; application code never parses SSE.
+- Structured Traffic clipboard preparation from exact typed single/group selections: canonical source
+  validation, pinned bounded body reads, labelled protocol evidence and a bounded text result.
 - Proxy runtime and traffic query contracts.
 - Safe loopback proxy start/stop/state use cases, independent capture pause/resume/state use cases,
   and technology-neutral runtime policy values.
@@ -144,3 +149,20 @@ View models consume the use cases; no query source is added to saved request sta
 Typed TrafficSource, device roster/presence and workspace preference contracts, source telemetry sampling, source resolution and scoped Clear workflows live here. DevicePresenceCoordinator fences every authenticated VPN generation with monotonic leases.
 
 Device tab eligibility combines retained identities with presence and the payload-free `DeviceTrafficHistory` boundary. Connected/reconnecting devices remain visible without traffic; offline devices require at least one retained HTTP exchange or opaque flow. Pairing is unaffected by hiding a tab.
+
+## Capture workflow follow-up
+
+File import contracts/use cases own temporary handles and bounded pages/details for draft preparation. They never treat recorded device identities as authenticated sources. Companion recording readiness projects the existing coherent per-device capture snapshot. See `docs/capture_import.md` and `docs/companion_capture_readiness.md` for behavior and qualification boundaries.
+
+Typed import actions prepare only unsent API Studio or unsaved interception/condition/TLS editor values. Workspace ownership comes from the app-selected context, not file metadata. Registered
+protocol extensions suggest criteria from bounded canonical request input. Both dropped paths and native
+picking reuse the same parser port. See `docs/capture_drop_actions.md`.
+
+## Execution clipboard preparation
+
+`StudioCopySource` supplies one bounded immutable execution snapshot independently of Traffic.
+`CopyStudioExecutionUseCase` reuses canonical Traffic rendering/formatting for HTTP and the registered
+stream interpreter for SSE; native sessions retain operation, direction, metadata and engine-decoded
+message provenance. Original bytes and interpreted text stay separate. The command resolves only the
+frozen execution owner/preset on IO and returns text without publishing to the clipboard.
+See `docs/api_studio_copy.md` for bounds and lifecycle guarantees.

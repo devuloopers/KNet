@@ -56,3 +56,9 @@ enum class NetworkConditionsTab(
     /** Built-in and custom simulation profiles with their full available table viewport. */
     PROFILES("Profiles"),
 }
+
+/** Lightweight Traffic toolbar projection; graph samples and rule-editor state never invalidate this control. */
+data class NetworkConditionsQuickControlState(
+    /** Saved effective configuration for the selected workspace. */ val configuration: NetworkConditionConfiguration,
+    /** Most recent action failure shown by the quick control. */ val errorMessage: String?,
+)

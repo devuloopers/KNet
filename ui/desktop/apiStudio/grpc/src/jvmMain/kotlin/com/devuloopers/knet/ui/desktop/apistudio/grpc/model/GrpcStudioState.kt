@@ -16,6 +16,8 @@ data class GrpcStudioState(
     val metadata: List<ApiStudioProtocolMetadataEntry> = emptyList(),
     val outboundMessages: List<String> = listOf(""),
     val selectedOutboundIndex: Int = 0,
+    /** Original native execution archive, independent of the rolling visible events. */
+    val exportSession: com.devuloopers.knet.application.contract.export.StudioExportSession? = null,
     val events: List<ApiStudioProtocolExecutionEvent> = emptyList(),
     val selectedEventIndex: Int? = null,
     val isExecuting: Boolean = false,

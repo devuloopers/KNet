@@ -53,6 +53,8 @@ public data class CompanionViewModelDependencies(
     /** Authenticates and serializes a desktop handoff, stopping any old capture first. */
     public val switchDesktop: SwitchCompanionDesktopUseCase,
     public val observeConnection: ObserveCompanionConnectionUseCase,
+    /** Authenticated per-device recording readiness, independent of VPN transport connectivity. */
+    public val observeDesktopCapture: com.devuloopers.knet.companion.application.usecase.ObserveCompanionDesktopCaptureUseCase,
     public val observeNetwork: ObserveCompanionNetworkUseCase,
     public val observeDiscovery: ObserveCompanionDiscoveryUseCase,
     public val maintainEndpoint: MaintainCompanionEndpointUseCase,

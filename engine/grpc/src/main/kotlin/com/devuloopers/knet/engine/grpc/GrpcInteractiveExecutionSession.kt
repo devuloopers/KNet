@@ -33,6 +33,7 @@ internal class GrpcInteractiveExecutionSession(
     private var halfClosed = false
     private var outboundMessageCount = 0
 
+    private val responseEvidence = GrpcServerResponseEvidence()
     private val call: ClientCall<ByteArray, ByteArray> = channel.newCall(
         MethodDescriptor.newBuilder<ByteArray, ByteArray>()
             .setType(draft.callShape.methodType)
@@ -45,7 +46,7 @@ internal class GrpcInteractiveExecutionSession(
             .setRequestMarshaller(ByteArrayMarshaller)
             .setResponseMarshaller(ByteArrayMarshaller)
             .build(),
-        CallOptions.DEFAULT.withDeadlineAfter(draft.deadlineMillis, TimeUnit.MILLISECONDS),
+        CallOptions.DEFAULT.withDeadlineAfter(draft.deadlineMillis, TimeUnit.MILLISECONDS).withStreamTracerFactory(responseEvidence),
     )
 
     override val events: Flow<ApiStudioProtocolExecutionEvent> = eventChannel.receiveAsFlow()
@@ -61,6 +62,11 @@ internal class GrpcInteractiveExecutionSession(
         )
         call.start(
             object : ClientCall.Listener<ByteArray>() {
+                    override fun onHeaders(headers: Metadata) {
+                        publish(ApiStudioProtocolExecutionEvent.Started("Server response headers", serverResponseReceived = true,
+                            responseHeaders = headers.presentationEntries()))
+                    }
+
                 override fun onMessage(message: ByteArray) {
                     if (publishMessage(ApiStudioProtocolMessageDirection.INBOUND, message)) {
                         call.request(1)
@@ -193,6 +199,7 @@ internal class GrpcInteractiveExecutionSession(
             ApiStudioProtocolExecutionEvent.Failed(
                 code = status.code.name,
                 message = status.description ?: status.code.name,
+                serverResponseReceived = responseEvidence.present,
                 retryable = status.code.isRetryable,
                 actualProtocol = "HTTP/2",
                 trailers = trailers.presentationEntries(),

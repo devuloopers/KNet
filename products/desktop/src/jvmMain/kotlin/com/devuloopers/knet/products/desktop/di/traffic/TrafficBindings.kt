@@ -28,9 +28,45 @@ import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficProtectionViewMo
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
+import org.koin.dsl.onClose
 
 /** Canonical traffic maintenance/query adapters and traffic application workflows. */
 internal val trafficBindings: Module = module {
+    factory<com.devuloopers.knet.application.contract.traffic.TrafficDetailsFormatting> { com.devuloopers.knet.data.desktop.traffic.DesktopTrafficDetailsFormatting() }
+    factory { com.devuloopers.knet.application.usecase.traffic.CopyTrafficDetailsUseCase(get(), get(), get(), get(), get(), get(), get()) }
+    factory<com.devuloopers.knet.application.usecase.traffic.PrepareTrafficDetailsUseCase> { get<com.devuloopers.knet.application.usecase.traffic.CopyTrafficDetailsUseCase>() }
+    viewModel { com.devuloopers.knet.ui.desktop.traffic.copy.TrafficDetailsCopyViewModel(get()) }
+
+    single<com.devuloopers.knet.application.contract.importcapture.CaptureImportRepository> {
+        com.devuloopers.knet.data.desktop.importcapture.DesktopCaptureImportRepository(
+            get<com.devuloopers.knet.products.desktop.config.DesktopConfiguration>().appDirectory.resolve("imports/process").toFile())
+    }
+    single<com.devuloopers.knet.application.contract.importcapture.CaptureImportFilePicker> {
+        com.devuloopers.knet.data.desktop.importcapture.DesktopCaptureImportFilePicker()
+    }
+    factory { com.devuloopers.knet.application.usecase.traffic.OpenCaptureImportUseCase(get(), get()) }
+    factory { com.devuloopers.knet.application.usecase.traffic.ReadCaptureImportPageUseCase(get()) }
+    factory { com.devuloopers.knet.application.usecase.traffic.ReadCaptureImportRecordUseCase(get()) }
+    factory { com.devuloopers.knet.application.usecase.traffic.CloseCaptureImportUseCase(get()) }
+    factory { com.devuloopers.knet.application.usecase.traffic.PrepareCaptureImportActionUseCase(get(), get(), get()) }
+    viewModel { com.devuloopers.knet.ui.desktop.traffic.importcapture.CaptureImportDialogViewModel(get(), get(), get(), get(), get()) }
+
+    single<com.devuloopers.knet.application.contract.export.CaptureExportRepository> {
+        com.devuloopers.knet.data.desktop.export.DesktopCaptureExportRepository(get(), get(), get(), get(), get(),
+            get<com.devuloopers.knet.products.desktop.config.DesktopConfiguration>().appDirectory.resolve("exports/snapshots").toFile())
+    }
+    single { com.devuloopers.knet.data.desktop.export.DesktopStudioExportRecorder(
+        get<com.devuloopers.knet.products.desktop.config.DesktopConfiguration>().appDirectory.resolve("exports/studio").toFile()) }.onClose { it?.close() }
+    single<com.devuloopers.knet.application.contract.export.StudioExportRecorder> { get<com.devuloopers.knet.data.desktop.export.DesktopStudioExportRecorder>() }
+    single<com.devuloopers.knet.application.contract.copy.StudioCopySource> { get<com.devuloopers.knet.data.desktop.export.DesktopStudioExportRecorder>() }
+    factory<com.devuloopers.knet.application.usecase.traffic.PrepareStudioCopyUseCase> { com.devuloopers.knet.application.usecase.traffic.CopyStudioExecutionUseCase(get(), get(), get(), get()) }
+    viewModel { com.devuloopers.knet.ui.desktop.httppanel.copy.StudioDetailsCopyViewModel(get()) }
+    single<com.devuloopers.knet.application.contract.export.CaptureExportFilePicker> { com.devuloopers.knet.data.desktop.export.DesktopCaptureExportFilePicker() }
+    factory { com.devuloopers.knet.application.usecase.traffic.PrepareCaptureExportUseCase(get()) }
+    factory { com.devuloopers.knet.application.usecase.traffic.SaveCaptureExportUseCase(get(), get()) }
+    factory { com.devuloopers.knet.application.usecase.traffic.ReleaseCaptureExportUseCase(get()) }
+    viewModel { com.devuloopers.knet.ui.desktop.httppanel.export.CaptureExportViewModel(get(), get(), get()) }
+
     factory { com.devuloopers.knet.application.usecase.traffic.ResolveCapturedTrafficSourceUseCase(get()) }
     viewModel { TrafficProtectionViewModel(get(), get(), get()) }
     single { BodyDeletionReconciler(get<KNetDatabase>().canonicalCaptureDao(), get()) }

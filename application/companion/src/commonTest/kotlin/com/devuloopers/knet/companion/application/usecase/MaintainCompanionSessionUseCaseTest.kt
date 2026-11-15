@@ -233,6 +233,30 @@ class MaintainCompanionSessionUseCaseTest {
         assertNull(fixture.maintain.state.value)
     }
 
+    @Test fun `capture status revisions are independent and cannot renew the network policy lease`() = runTest {
+        val fixture = Fixture()
+        val job = backgroundScope.launch { fixture.run(testScheduler) }
+        runCurrent()
+        val first = fixture.connections.single()
+        first.configuration(1); runCurrent()
+        suspend fun status(revision: Long, status: CompanionDesktopCaptureState) {
+            first.frames.send(CompanionSessionMessage(CompanionSessionMessageKind.CAPTURE_STATUS, "run", revision = revision, captureStatus = status))
+            runCurrent()
+        }
+        status(1, CompanionDesktopCaptureState.PAUSED)
+        assertEquals(CompanionDesktopCaptureState.PAUSED, fixture.maintain.state.value?.captureStatus)
+        status(2, CompanionDesktopCaptureState.CAPTURING)
+        status(1, CompanionDesktopCaptureState.STOPPED)
+        assertEquals(CompanionDesktopCaptureState.CAPTURING, fixture.maintain.state.value?.captureStatus)
+        repeat(4) { number -> advanceTimeBy(1000); runCurrent(); status(number + 3L, CompanionDesktopCaptureState.CAPTURING) }
+        advanceTimeBy(1000); runCurrent()
+        assertTrue(first.closed, "Status frames cannot masquerade as fresh network-policy renewals")
+        assertEquals(PacketConditionConfiguration.Disabled, fixture.applied.last())
+        advanceTimeBy(1000); runCurrent()
+        assertEquals(CompanionDesktopCaptureState.UNKNOWN, fixture.maintain.state.value?.captureStatus)
+        job.cancelAndJoin()
+    }
+
     private class Fixture {
         val registration = CompanionUseCasesTest.registration()
         val repository = Repository(registration)

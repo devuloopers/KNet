@@ -187,6 +187,10 @@ Reviewed `/tmp/knet-traffic-scrollbar-wide.png` and
 
 ## Complete selected-row frame (2026-11-13)
 
+The frame is reserved for ordinary single-row selection. Selecting multiple Traffic records suppresses
+the outline while preserving every selected row's background, inspector focus and export membership.
+Returning to one selected row restores the frame; horizontal scrolling does not change this policy.
+
 Traffic paints its selected-row frame at the visible row viewport boundary, after scrollbar clearance and before
 horizontal scrolling. The source cells and selected fill retain their shared column offset, while all four frame
 edges remain visible even when the table is wider than the pane. Lazy row offsets move the frame with vertical

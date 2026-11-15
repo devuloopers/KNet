@@ -83,6 +83,11 @@ public sealed interface ApiStudioProtocolExecutionEvent {
         public val summary: String,
         /** Server-selected application protocol, when the transport negotiated one. */
         public val negotiatedApplicationProtocol: String? = null,
+        /** True only after the server handshake/headers were received, never merely on call creation. */
+        public val serverResponseReceived: Boolean = false,
+        public val responseHeaders: List<Pair<String, String>> = emptyList(),
+        /** Execution-owned archive published by the application wrapper. */
+        public val exportSession: com.devuloopers.knet.application.contract.export.StudioExportSession? = null,
     ) : ApiStudioProtocolExecutionEvent
     public data class Message(public val message: ApiStudioProtocolMessage) : ApiStudioProtocolExecutionEvent
     public data class Completed(
@@ -97,6 +102,9 @@ public sealed interface ApiStudioProtocolExecutionEvent {
         public val message: String,
         public val retryable: Boolean,
         public val actualProtocol: String? = null,
+        public val serverResponseReceived: Boolean = false,
+        public val responseStatus: Int? = null,
+        public val responseHeaders: List<Pair<String, String>> = emptyList(),
         public val trailers: List<Pair<String, String>> = emptyList(),
     ) : ApiStudioProtocolExecutionEvent
 }
@@ -122,6 +130,8 @@ public data class ApiStudioProtocolOutboundMessage(
 
 /** Live client-streaming or bidirectional execution owned by a protocol engine. */
 public interface ApiStudioProtocolExecutionSession {
+    /** Optional execution archive; absence keeps specialized executors compatible. */
+    public val exportSession: com.devuloopers.knet.application.contract.export.StudioExportSession? get() = null
     public val events: Flow<ApiStudioProtocolExecutionEvent>
 
     public suspend fun send(message: ApiStudioProtocolOutboundMessage): Result<Unit>

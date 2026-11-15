@@ -67,6 +67,7 @@ fun KNetWorkspaceHost(
     onNavigateToDestination: (DesktopDestination) -> Unit = {},
     modifier: Modifier = Modifier,
     onClearTraffic: (() -> Unit)? = null,
+    importDialogViewModel: com.devuloopers.knet.ui.desktop.traffic.importcapture.CaptureImportDialogViewModel = koinViewModel(key = "capture-import-dialog"),
 ) {
     val apiStudioViewModel: ApiStudioViewModel = koinViewModel()
     val collectionsViewModel: CollectionsViewModel = koinViewModel()
@@ -83,9 +84,19 @@ fun KNetWorkspaceHost(
     NetworkConditionsRuntimeMonitoring(networkConditionsViewModel,
         active = destination == DesktopDestination.Traffic || destination == DesktopDestination.NetworkConditions)
     val protectedTrafficViewModel: ProtectedTrafficViewModel = koinViewModel()
-    val trafficState by trafficViewModel.uiState.collectAsState()
+    val trafficState by trafficViewModel.hostState.collectAsState()
     val deviceWorkspaces: DeviceWorkspaceViewModel = koinViewModel()
-    val deviceWorkspaceState by deviceWorkspaces.state.collectAsState()
+    val deviceWorkspaceState by deviceWorkspaces.navigationState.collectAsState()
+    val importWorkspace = when (val source = deviceWorkspaceState.source) {
+        is com.devuloopers.knet.application.contract.traffic.TrafficSource.Device -> com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(source.id)
+        else -> com.devuloopers.knet.domain.policy.PolicyWorkspace.Other
+    }
+    val importWorkspaceName = (deviceWorkspaceState.source as? com.devuloopers.knet.application.contract.traffic.TrafficSource.Device)?.let { source ->
+        deviceWorkspaceState.devices.firstOrNull { it.device.id == source.id }?.device?.displayName
+    } ?: "Other traffic"
+    val showImport = remember(importDialogViewModel, importWorkspace, importWorkspaceName) {
+        { importDialogViewModel.show(importWorkspace, importWorkspaceName) }
+    }
     LaunchedEffect(deviceWorkspaceState.source) {
         trafficViewModel.selectSource(deviceWorkspaceState.source)
         val workspace = when (val selected = deviceWorkspaceState.source) {
@@ -107,27 +118,22 @@ fun KNetWorkspaceHost(
         onDispose { deviceWorkspaces.setMonitoring(false) }
     }
     val drawerEvent = breakpointState.activeEvent?.takeIf { event ->
-        trafficState.transactions.any { row ->
-            val interception = row.interception as? TrafficInterceptionUiState.Paused
-            row.transactionId == event.candidate.exchangeId.value && interception?.pendingId == event.id
-        }
+        trafficState.paused[event.candidate.exchangeId.value] == event.id
     }
     val messageDrawerEvent = breakpointState.activeMessageEvent?.takeIf { event ->
-        trafficState.transactions.any { row ->
-            val interception = row.interception as? TrafficInterceptionUiState.Paused
-            row.transactionId == event.candidate.exchangeId.value && interception?.pendingId == event.id
-        }
+        trafficState.paused[event.candidate.exchangeId.value] == event.id
     }
 
     Box(modifier = modifier.fillMaxSize()) {
         when (destination) {
             DesktopDestination.Traffic -> {
-                val networkConditionsState by networkConditionsViewModel.state.collectAsState()
                 TrafficScreen(
+                    onImportCapture = showImport,
                     onClearFeed = onClearTraffic,
                     protectionViewModel = trafficProtectionViewModel,
                     viewModel = trafficViewModel,
                     networkConditionsControl = {
+                        val networkConditionsState by networkConditionsViewModel.quickControlState.collectAsState()
                         NetworkConditionsQuickControl(
                             configuration = networkConditionsState.configuration,
                             onEnabledChange = networkConditionsViewModel::setEnabled,
@@ -138,7 +144,8 @@ fun KNetWorkspaceHost(
                         )
                     },
                     throughputIndicator = {
-                        NetworkThroughputIndicator(deviceWorkspaceState.throughput, onOpenOverview = {
+                        val liveDeviceState by deviceWorkspaces.state.collectAsState()
+                        NetworkThroughputIndicator(liveDeviceState.throughput, onOpenOverview = {
                             networkConditionsViewModel.selectTab(NetworkConditionsTab.OVERVIEW)
                             onNavigateToDestination(DesktopDestination.NetworkConditions)
                         }, scopeDescription = "Observed proxy bytes for the selected device or Other traffic, including protocol framing. Open the global Network Conditions Overview.")
@@ -328,6 +335,8 @@ fun KNetWorkspaceHost(
         }
         com.devuloopers.knet.ui.core.components.policy.RuleReplacementNotice(replacementNotice,
             Modifier.align(Alignment.BottomCenter).padding(KNetTheme.spacing.lg))
+
+
     }
 }
 

@@ -19,6 +19,7 @@ import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
+import com.devuloopers.knet.companion.presentation.state.withCaptureObservation
 import com.devuloopers.knet.companion.presentation.state.CompanionDesktopManagementState
 import com.devuloopers.knet.companion.presentation.state.CompanionCertificateExportState
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
@@ -92,8 +93,13 @@ public class CompanionViewModel(
                 certificateVerificationJob?.cancel()
                 certificateDownloadJob?.cancel()
                 mutableState.update { current ->
+                    val captureIdentityChanged = current.activeRegistration?.desktopId != registration?.desktopId ||
+                        current.activeRegistration?.rootCertificateSha256 != registration?.rootCertificateSha256
                     current.copy(
                         activeRegistration = registration,
+                        desktopCaptureStatus = if (captureIdentityChanged) com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.UNKNOWN else current.desktopCaptureStatus,
+                        desktopCaptureNotice = if (captureIdentityChanged) null else current.desktopCaptureNotice,
+                        captureNoticeFromPreflight = if (captureIdentityChanged) false else current.captureNoticeFromPreflight,
                         certificate = CompanionCertificateState.Unknown,
                         certificateExport = CompanionCertificateExportState.Idle,
                         failure = if (current.activeRegistration != registration) null else current.failure,
@@ -121,6 +127,11 @@ public class CompanionViewModel(
         viewModelScope.launch {
             dependencies.observeConnection.state.collect { connection ->
                 mutableState.update { current -> current.copy(connection = connection) }
+            }
+        }
+        viewModelScope.launch {
+            dependencies.observeDesktopCapture.execute().collect { observation ->
+                mutableState.update { current -> current.withCaptureObservation(observation) }
             }
         }
         viewModelScope.launch {
@@ -232,6 +243,10 @@ public class CompanionViewModel(
             }
 
             CompanionAction.StartInspectionRequested -> startInspection()
+            CompanionAction.CaptureNoticeDismissed -> mutableState.update { it.copy(desktopCaptureNotice = null, captureNoticeFromPreflight = false) }
+            CompanionAction.RecheckDesktopCaptureRequested -> {
+                if (mutableState.value.inspection !is CompanionInspectionState.Running) startInspection()
+            }
             CompanionAction.VpnConsentRequested -> emitEffect(CompanionEffect.RequestVpnConsent)
             is CompanionAction.VpnConsentResolved -> {
                 if (action.granted) {
@@ -391,7 +406,10 @@ public class CompanionViewModel(
 
     private fun startInspection(): Unit = launchOperation {
         when (val result = dependencies.startInspection.execute()) {
-            is StartCompanionInspectionResult.Started -> Unit
+            is StartCompanionInspectionResult.Started -> if (result.desktopCaptureStatus == com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.PAUSED) {
+                mutableState.update { current -> if (current.desktopCaptureStatus == com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.CAPTURING) current else
+                    current.copy(desktopCaptureNotice = result.desktopCaptureStatus, desktopCaptureStatus = result.desktopCaptureStatus, captureNoticeFromPreflight = false) }
+            }
             StartCompanionInspectionResult.VpnConsentRequired -> {
                 mutableState.update { current -> current.copy(inspectionPermissionRequired = true) }
             }
@@ -677,7 +695,11 @@ public class CompanionViewModel(
     }
 
     private fun showFailure(failure: CompanionFailure) {
-        mutableState.update { current -> current.copy(failure = failure) }
+        if (failure.code == CompanionFailureCode.DESKTOP_CAPTURE_STOPPED) mutableState.update { current -> current.copy(
+            failure = null, desktopCaptureNotice = com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.STOPPED,
+            desktopCaptureStatus = com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.STOPPED,
+            captureNoticeFromPreflight = true) }
+        else mutableState.update { current -> current.copy(failure = failure) }
     }
 
     private fun unknownFailure(): CompanionFailure = CompanionFailure(
@@ -704,7 +726,7 @@ private fun CompanionAction.isForegroundMutation(): Boolean = when (this) {
     CompanionAction.OpenDesktopsRequested, CompanionAction.AddDesktopRequested,
     CompanionAction.DesktopManagementDismissed, CompanionAction.InvitationScannerDismissed,
     CompanionAction.ScanInvitationRequested, CompanionAction.PickInvitationImageRequested,
-    CompanionAction.StartInspectionRequested, CompanionAction.StopInspectionRequested,
+    CompanionAction.StartInspectionRequested, CompanionAction.StopInspectionRequested, CompanionAction.RecheckDesktopCaptureRequested,
     CompanionAction.ContinueCertificateSetupRequested, CompanionAction.DownloadCertificateRequested,
     CompanionAction.RefreshCredentialRequested, CompanionAction.VpnConsentRequested,
     is CompanionAction.RegistrationSelected, is CompanionAction.ForgetDesktopRequested,

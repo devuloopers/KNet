@@ -36,14 +36,16 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  */
 @Composable
 fun ResponseSummaryHeader(
-    head: ResponseHead,
+    head: ResponseHead?,
     timings: ExchangeTimings,
     formattedSize: String,
     contentType: String? = null,
     responseBody: String = "",
     cookies: List<Pair<String, String>> = emptyList(),
     onClearResponse: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    exportAction: (@Composable () -> Unit)? = null,
+    copyAction: (@Composable () -> Unit)? = null,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -60,10 +62,9 @@ fun ResponseSummaryHeader(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 1. Pinned Status Code Badge
-        KNetHttpStatusBadge(
-            statusCode = head.status.code,
-            statusText = head.reasonPhrase.orEmpty(),
-        )
+        if (head != null) KNetHttpStatusBadge(
+            statusCode = head.status.code, statusText = head.reasonPhrase.orEmpty(),
+        ) else Text("Response", style = typography.bodySmall.copy(color = themeColors.textMuted), maxLines = 1, softWrap = false)
 
         VerticalDivider(modifier = Modifier.padding(vertical = 10.dp))
 
@@ -87,7 +88,7 @@ fun ResponseSummaryHeader(
                     softWrap = false,
                 )
                 Text(
-                    text = head.protocol.token,
+                    text = head?.protocol?.token ?: "—",
                     style = typography.bodySmall.copy(
                         color = themeColors.textPrimary,
                         fontWeight = FontWeight.Medium,
@@ -166,14 +167,15 @@ fun ResponseSummaryHeader(
             }
         }
 
-        ResponseInspectorActions(head, responseBody, cookies, onClearResponse)
+        ResponseInspectorActions(head, responseBody, cookies, onClearResponse, exportAction, copyAction)
     }
 }
 
 /** Copy and clear actions shared by standalone response headers and persistent-header Traffic inspectors. */
 @Composable
 internal fun ResponseInspectorActions(head: ResponseHead?, responseBody: String,
-    cookies: List<Pair<String, String>>, onClearResponse: (() -> Unit)? = null) {
+    cookies: List<Pair<String, String>>, onClearResponse: (() -> Unit)? = null, exportAction: (@Composable () -> Unit)? = null,
+    copyAction: (@Composable () -> Unit)? = null) {
     Row(verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
         val copyOptions = buildList {
@@ -185,7 +187,8 @@ internal fun ResponseInspectorActions(head: ResponseHead?, responseBody: String,
                 cookies.joinToString("; ") { "${it.first}=${it.second}" }
             })
         }
-        KNetCopyDropdownButton(primaryTextToCopy = { responseBody }, options = copyOptions)
+        if (copyAction != null) copyAction() else KNetCopyDropdownButton(primaryTextToCopy = { responseBody }, options = copyOptions)
+        exportAction?.invoke()
         if (onClearResponse != null) KNetIconButton(icon = KNetIcons.Delete,
             contentDescription = "Clear Response", onClick = onClearResponse)
     }

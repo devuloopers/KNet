@@ -52,6 +52,7 @@ class WebSocketStudioViewModel(
     fun openWorkspaceDocument(documentId: String?) {
         val current = mutableState.value
         if (documentId != null && documentId == current.documentId) return
+        mutableState.value.exportSession?.release()
         cancelSession()
         autoSaveJob?.cancel()
         documentLoadJob?.cancel()
@@ -127,6 +128,7 @@ class WebSocketStudioViewModel(
 
     /** Validates the current draft and opens a capture-aware interactive WebSocket session. */
     fun connect() {
+        mutableState.value.exportSession?.release()
         val snapshot = mutableState.value
         val document = createExecutionDocument(snapshot).getOrElse { error ->
             mutableState.update { it.copy(errorMessage = error.message ?: "The WebSocket draft is invalid.") }
@@ -143,11 +145,13 @@ class WebSocketStudioViewModel(
             mutableState.update { it.copy(errorMessage = error.message ?: "Unable to open the WebSocket session.") }
             return
         }
+        mutableState.update { it.copy(exportSession = session.exportSession) }
         activeSession = session
         mutableState.update {
             it.copy(
                 isConnecting = true,
                 isConnected = false,
+                exportSession = session.exportSession,
                 events = emptyList(),
                 selectedEventIndex = null,
                 errorMessage = null,
@@ -222,6 +226,7 @@ class WebSocketStudioViewModel(
             val events = (current.events + event).takeLast(MAXIMUM_VISIBLE_EVENTS)
             current.copy(
                 events = events,
+                exportSession = (event as? ApiStudioProtocolExecutionEvent.Started)?.exportSession ?: current.exportSession,
                 selectedEventIndex = when (event) {
                     is ApiStudioProtocolExecutionEvent.Message -> events.lastIndex
                     else -> current.selectedEventIndex
@@ -359,6 +364,7 @@ class WebSocketStudioViewModel(
     }
 
     override fun onCleared() {
+        mutableState.value.exportSession?.release()
         activeSession?.cancel()
         super.onCleared()
     }

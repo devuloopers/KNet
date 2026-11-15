@@ -136,7 +136,7 @@ private class GraphQLExecutionSession(
             is ApiStudioProtocolExecutionEvent.Started -> acceptStarted(event)
             is ApiStudioProtocolExecutionEvent.Message -> acceptMessage(event)
             is ApiStudioProtocolExecutionEvent.Completed -> finish(event)
-            is ApiStudioProtocolExecutionEvent.Failed -> fail(event.code, event.message, event.retryable)
+            is ApiStudioProtocolExecutionEvent.Failed -> fail(event.code, event.message, event.retryable, event)
         }
     }
 
@@ -150,6 +150,7 @@ private class GraphQLExecutionSession(
             return
         }
         eventFlow.emit(ApiStudioProtocolExecutionEvent.Started(
+            serverResponseReceived = event.serverResponseReceived,
             summary = "GraphQL WebSocket ${draft.url}",
             negotiatedApplicationProtocol = GRAPHQL_TRANSPORT_WS_SUBPROTOCOL,
         ))
@@ -207,7 +208,7 @@ private class GraphQLExecutionSession(
         eventFlow.tryEmit(event.copy(actualProtocol = GRAPHQL_TRANSPORT_WS_SUBPROTOCOL))
     }
 
-    private fun fail(code: String, message: String, retryable: Boolean) {
+    private fun fail(code: String, message: String, retryable: Boolean, evidence: ApiStudioProtocolExecutionEvent.Failed? = null) {
         if (!terminal.compareAndSet(expect = false, update = true)) return
         acknowledgementDeadline?.cancel()
         stateMachine.close()
@@ -216,6 +217,9 @@ private class GraphQLExecutionSession(
             code = code,
             message = message,
             retryable = retryable,
+            serverResponseReceived = evidence?.serverResponseReceived == true,
+            responseStatus = evidence?.responseStatus,
+            responseHeaders = evidence?.responseHeaders.orEmpty(),
             actualProtocol = GRAPHQL_TRANSPORT_WS_SUBPROTOCOL,
         ))
     }

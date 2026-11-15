@@ -117,6 +117,8 @@ class TrafficViewModel(
 
     private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<TrafficState> = _uiState.asStateFlow()
+    /** Shell observers receive only routing changes, avoiding top-level recomposition on every body/row update. */
+    val hostState: StateFlow<TrafficHostState> = com.devuloopers.knet.application.contract.device.ProjectedStateFlow(uiState) { it.toHostState() }
     private val proxyRuntimeStates = observeProxyRuntimeStateUseCase.execute()
     private val trafficCaptureStates = observeTrafficCaptureStateUseCase.executeWorkspaces()
 
@@ -141,6 +143,28 @@ class TrafficViewModel(
     private var scrollPreferenceRevision = 0L
     private var scrollPreferenceJob: Job? = null
     private var pendingSources: Map<String, TrafficSource?> = emptyMap()
+
+    /** Freezes the current store filters for a paged export, rather than exporting the visible window. */
+    fun exportSource(): com.devuloopers.knet.application.contract.export.CaptureExportSource.Traffic {
+        val state = uiState.value
+        return com.devuloopers.knet.application.contract.export.CaptureExportSource.Traffic(TrafficPageQuery(
+            source = state.source, limit = 128,
+            searchContains = state.searchQuery.trim().takeIf { it.isNotBlank() },
+            methods = state.selectedMethodFilter.toCanonicalMethods(), statuses = state.selectedStatusFilter.toCanonicalStatuses(),
+            schemes = state.selectedSchemeFilter.toCanonicalSchemes(), protocols = state.selectedHttpVersionFilter.toCanonicalProtocols(),
+            recordFilter = state.selectedTypeFilter.toCanonicalRecordFilter(),
+        ))
+    }
+
+    /** Freezes selected typed identities; page eviction cannot broaden selection into an entire query. */
+    fun exportSelection(): com.devuloopers.knet.application.contract.export.CaptureExportSource.Selection? {
+        val state = uiState.value
+        val records = state.selection.records
+        if (records.isEmpty()) return null
+        val loadedOrder = state.filteredTransactions.map { it.recordId }
+        val ordered = loadedOrder.filter { it in records } + records.filterNot { it in loadedOrder }
+        return com.devuloopers.knet.application.contract.export.CaptureExportSource.Selection(ordered, state.source)
+    }
 
     /** Switches views synchronously, retaining at most four body-free row windows and bounded shared prepared data. */
     fun selectSource(source: TrafficSource) {
@@ -207,6 +231,7 @@ class TrafficViewModel(
                             filteredTransactions = emptyList(),
                             totalAvailableCount = 0L,
                             selectedTransactionId = null,
+                            selection = com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowSelection(),
                             preparedState = InspectorPreparedState(),
                             nextPageCursor = null,
                             olderPageAnchor = null,
@@ -831,6 +856,9 @@ class TrafficViewModel(
             is TrafficIntent.SetAutoScrollMode -> changeScrollSettings(_uiState.value.scrollSettings.copy(mode = intent.mode))
             TrafficIntent.JumpToLatest -> jumpToLatest()
 
+            is TrafficIntent.ReportActionError -> _uiState.update { state ->
+                if (state.source == intent.source) state.copy(trafficErrorMessage = intent.message) else state
+            }
             is TrafficIntent.DismissEngineError -> {
                 _uiState.update { it.copy(engineErrorMessage = null, trafficErrorMessage = null) }
             }
@@ -889,6 +917,22 @@ class TrafficViewModel(
                     )
                 }
             }
+
+            is TrafficIntent.SelectTraffic -> {
+                val current = _uiState.value
+                val selection = current.selection.select(intent.id, intent.gesture, current.filteredTransactions.map { it.recordId })
+                if (selection == null) _uiState.update { it.copy(trafficErrorMessage = "Select up to 10,000 items, or clear selection to export all filtered results.") }
+                else {
+                    _uiState.update { it.copy(selection = selection) }
+                    processIntent(TrafficIntent.SelectTransaction(when (val id = intent.id) {
+                        is com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Exchange -> id.id.value
+                        is com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Opaque -> id.id.value
+                    }))
+                }
+            }
+            TrafficIntent.SelectLoadedTraffic -> _uiState.update { current -> current.copy(selection =
+                com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowSelection(current.filteredTransactions.map { it.recordId }.toSet(), current.filteredTransactions.firstOrNull()?.recordId, initialized = true)) }
+            TrafficIntent.ClearTrafficSelection -> _uiState.update { it.copy(selection = it.selection.clear()) }
 
             is TrafficIntent.SelectInspectorTab -> {
                 _uiState.update { it.copy(activeInspectorTab = intent.tab) }
@@ -1018,6 +1062,7 @@ class TrafficViewModel(
     }
 
     private fun scheduleFilteredPageRefresh() {
+        _uiState.update { it.copy(selection = com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowSelection()) }
         sourceGeneration++ // Discard any response for the previous filter before rebasing arrivals.
         _uiState.update { it.copy(reading = TrafficReadingState(jumpRevision = it.reading.jumpRevision + 1), viewport = TrafficViewport(), readingEpoch = it.readingEpoch + 1, newerPageBlocked = false) }
         filterRefreshJob?.cancel()
@@ -1149,15 +1194,16 @@ class TrafficViewModel(
                     .thenByDescending { row -> row.timestamp }
                     .thenByDescending(TrafficRowUiState::transactionId),
             )
-        val selectedId = current.selectedTransactionId
-            ?.takeIf { id -> visibleRows.any { row -> row.transactionId == id } }
-            ?: visibleRows.firstOrNull()?.transactionId
+        val selectedRow = visibleRows.firstOrNull { it.transactionId == current.selectedTransactionId }
+            ?: visibleRows.firstOrNull()
+        val selectedId = selectedRow?.transactionId
         _uiState.update { state ->
             val preparedState = preparedForSelection(state, selectedId)
             state.copy(
                 transactions = rows,
                 filteredTransactions = visibleRows,
                 selectedTransactionId = selectedId,
+                selection = state.selection.initialize(selectedRow?.recordId),
                 preparedState = preparedState,
             )
         }

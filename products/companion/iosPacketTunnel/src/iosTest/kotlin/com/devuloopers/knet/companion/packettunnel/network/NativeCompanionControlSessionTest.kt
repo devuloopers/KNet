@@ -38,6 +38,22 @@ class NativeCompanionControlSessionTest {
         advanceTimeBy(60_000); runCurrent()
         assertEquals(count, connection.sent.size)
     }
+    @Test fun captureReadinessFramesDoNotReconnectOrAcknowledgePacketPolicy() = runTest {
+        val connection = Connection(); var attempts = 0
+        val session = NativeCompanionControlSession(options(), {}, CompanionSessionTransport { _, _ -> attempts++; connection }, backgroundScope)
+        session.start(); runCurrent()
+        val run = connection.sent.first().runId
+        connection.frames.send(CompanionSessionMessage(CompanionSessionMessageKind.CAPTURE_STATUS, run, revision = 1,
+            captureStatus = CompanionDesktopCaptureState.PAUSED)); runCurrent()
+        advanceTimeBy(2000); runCurrent()
+        assertEquals(1, attempts); assertFalse(connection.closed)
+        assertFalse(connection.sent.any { it.kind == CompanionSessionMessageKind.POLICY_ACK })
+        connection.frames.send(CompanionSessionMessage(CompanionSessionMessageKind.CONFIGURATION, run, revision = 1,
+            configuration = PacketConditionConfiguration.Disabled)); runCurrent()
+        assertEquals(CompanionPolicyAcknowledgement.APPLIED, connection.sent.last().acknowledgement)
+        session.close(); runCurrent(); assertTrue(connection.closed)
+    }
+
     @Test fun nativeRevocationTerminatesTheOwnerWithoutReconnect() = runTest {
         val connection = Connection()
         var revoked = 0; var attempts = 0

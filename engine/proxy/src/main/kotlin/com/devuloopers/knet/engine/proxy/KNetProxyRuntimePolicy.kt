@@ -12,6 +12,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @property readIdleTimeoutMillis HTTP/setup inactivity deadline; either-direction progress and intentional holds keep it alive.
  * @property writeIdleTimeoutMillis Deadline for an outstanding socket write, not an idle open connection.
  * @property rawTunnelIdleTimeoutMillis Optional inactivity deadline after a raw CONNECT tunnel is installed; zero permits quiet reusable connections.
+ * @property rawTunnelHalfCloseIdleTimeoutMillis Reverse-direction idle grace after one raw tunnel input ends.
+ * It starts only after accepted writes drain, resets on progress, and never limits a healthy duplex tunnel.
  * @property gracefulShutdownTimeoutMillis Event-loop graceful shutdown deadline.
  * @property maximumDownstreamConnections Total admitted client connections.
  * @property maximumConnectionsPerClient Admitted connections for one remote address.
@@ -39,6 +41,7 @@ data class KNetProxyRuntimePolicy(
     val maximumHttp2HeaderListBytes: Long = 64L * 1024L,
     val http2InitialWindowBytes: Int = 65_535,
     val rawTunnelIdleTimeoutMillis: Long = 0L,
+    val rawTunnelHalfCloseIdleTimeoutMillis: Long = 60_000L,
 ) {
     init {
         require(connectTimeoutMillis > 0L) { "Connect timeout must be positive." }
@@ -52,6 +55,7 @@ data class KNetProxyRuntimePolicy(
         require(readIdleTimeoutMillis > 0L) { "Read-idle timeout must be positive." }
         require(writeIdleTimeoutMillis > 0L) { "Write-idle timeout must be positive." }
         require(rawTunnelIdleTimeoutMillis >= 0L) { "Raw-tunnel inactivity timeout must be nonnegative." }
+        require(rawTunnelHalfCloseIdleTimeoutMillis > 0L) { "Raw-tunnel half-close idle grace must be positive." }
         require(gracefulShutdownTimeoutMillis > 0L) { "Graceful shutdown timeout must be positive." }
         require(maximumDownstreamConnections > 0) { "Downstream connection limit must be positive." }
         require(maximumConnectionsPerClient > 0) { "Per-client connection limit must be positive." }

@@ -22,3 +22,7 @@
 ## Extension notes
 
 Additional WebSocket authoring options belong in this module and its versioned codec. New API Studio protocols should add sibling contribution modules instead of modifying this editor.
+
+The native response timeline exposes the shared execution Copy split control beside Export. Its menu
+uses the recorded protocol/metadata/message directions and the shell extension slot; layout overflow
+remains owned by `:ui:core`. See `docs/api_studio_copy.md`.

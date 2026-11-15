@@ -340,6 +340,14 @@ private fun GrpcEventPane(
     val colors = KNetTheme.colors
     val selectedEvent = state.selectedEventIndex?.let(state.events::getOrNull)
     Column(modifier = modifier.padding(KNetTheme.spacing.md)) {
+        com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar(scrollLeading = true, leading = {
+            com.devuloopers.knet.ui.desktop.apistudio.export.StudioCopyAction(state.exportSession, "grpc",
+                kind = com.devuloopers.knet.domain.request.descriptor.RequestKindId.GRPC,
+                primary = com.devuloopers.knet.application.contract.traffic.TrafficCopyPreset.GRPC_MESSAGES, label = "Copy messages")
+            Spacer(Modifier.width(KNetTheme.spacing.sm))
+            com.devuloopers.knet.ui.desktop.apistudio.export.StudioExportAction(state.exportSession)
+        })
+
         Text(
             "Stream timeline",
             style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),

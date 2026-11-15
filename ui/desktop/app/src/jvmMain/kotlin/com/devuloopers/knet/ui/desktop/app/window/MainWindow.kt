@@ -3,6 +3,7 @@ package com.devuloopers.knet.ui.desktop.app.window
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.unit.Dp
@@ -36,59 +37,71 @@ fun MainWindow(
 ) {
     val destination by appState.navigationController.currentDestination.collectAsState()
     val deviceWorkspaces: DeviceWorkspaceViewModel = koinViewModel()
-    val devices by deviceWorkspaces.state.collectAsState()
+    val devices by deviceWorkspaces.navigationState.collectAsState()
     val traffic: com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel = koinViewModel()
-    val trafficState by traffic.uiState.collectAsState()
+    val trafficClearing by remember(traffic) { com.devuloopers.knet.application.contract.device.ProjectedStateFlow(traffic.uiState) { it.isClearingHistory } }.collectAsState()
     val breakpointManager: com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel = koinViewModel()
-    val interceptions by breakpointManager.uiState.collectAsState()
+    val pendingCounts by remember(breakpointManager) { com.devuloopers.knet.application.contract.device.ProjectedStateFlow(breakpointManager.uiState) { it.pendingByWorkspace } }.collectAsState()
+    val captureImport: com.devuloopers.knet.ui.desktop.traffic.importcapture.CaptureImportDialogViewModel = koinViewModel(key = "capture-import-dialog")
+    val importWorkspace = when (val source = devices.source) {
+        is com.devuloopers.knet.application.contract.traffic.TrafficSource.Device -> com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(source.id)
+        else -> com.devuloopers.knet.domain.policy.PolicyWorkspace.Other
+    }
+    val importWorkspaceName = (devices.source as? com.devuloopers.knet.application.contract.traffic.TrafficSource.Device)?.let { source ->
+        devices.devices.firstOrNull { it.device.id == source.id }?.device?.displayName
+    } ?: "Other traffic"
     KNetApplicationTheme {
-        Column(modifier.fillMaxSize()) {
-            titleBarWrapper { DeviceWorkspaceTabs(devices.copy(pendingCounts = interceptions.pendingByWorkspace), { source -> traffic.selectSource(source); deviceWorkspaces.select(source) },
-                Modifier.fillMaxWidth().padding(start = titleBarInsetStart), onTitleBarInteractiveBoundsChanged,
-                onClose = { id -> if (!trafficState.isClearingHistory) deviceWorkspaces.requestClose(id) },
-                closeInProgress = trafficState.isClearingHistory) }
-            KNetApplicationScaffold(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                navigationRail = {
-                    NavigationRail(
-                        currentDestination = destination,
-                        onDestinationSelected = { appState.navigationController.navigate(it) }
-                    )
-                },
-                dialogHost = {
-                    KNetDialogHost()
-                },
-                overlayHost = {
-                    KNetOverlayHost()
-                },
-                notificationHost = {
-                    KNetNotificationHost()
-                }
-            ) {
-                KNetWorkspaceHost(
-                    destination = destination,
-                    onNavigateToDestination = { appState.navigationController.navigate(it) },
-                    onClearTraffic = {
-                        if (!traffic.uiState.value.isClearingHistory) {
-                            deviceWorkspaces.requestClear(traffic.uiState.value.source)?.let(traffic::clearSource)
-                        }
+        com.devuloopers.knet.ui.desktop.app.workspace.CaptureImportHost(captureImport, importWorkspace, importWorkspaceName,
+            { appState.navigationController.navigate(it) }, modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                titleBarWrapper { DeviceWorkspaceTabs(devices.copy(pendingCounts = pendingCounts), { source -> traffic.selectSource(source); deviceWorkspaces.select(source) },
+                    Modifier.fillMaxWidth().padding(start = titleBarInsetStart), onTitleBarInteractiveBoundsChanged,
+                    onClose = { id -> if (!trafficClearing) deviceWorkspaces.requestClose(id) },
+                    closeInProgress = trafficClearing) }
+                KNetApplicationScaffold(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    navigationRail = {
+                        NavigationRail(
+                            currentDestination = destination,
+                            onDestinationSelected = { appState.navigationController.navigate(it) }
+                        )
                     },
+                    dialogHost = {
+                        KNetDialogHost()
+                    },
+                    overlayHost = {
+                        KNetOverlayHost()
+                    },
+                    notificationHost = {
+                        KNetNotificationHost()
+                    }
+                ) {
+                    KNetWorkspaceHost(
+                        importDialogViewModel = captureImport,
+                        destination = destination,
+                        onNavigateToDestination = { appState.navigationController.navigate(it) },
+                        onClearTraffic = {
+                            if (!traffic.uiState.value.isClearingHistory) {
+                                deviceWorkspaces.requestClear(traffic.uiState.value.source)?.let(traffic::clearSource)
+                            }
+                        },
+                    )
+                }
+            }
+            devices.clearConfirmation?.let { pending ->
+                val connected = devices.devices.any { entry ->
+                    entry.device.id == pending.source.id && entry.status != DevicePresenceStatus.OFFLINE
+                }
+                ConfirmDialog(
+                    title = if (connected) "Clear this device's traffic?" else "Clear traffic and close this tab?",
+                    message = "Remove all locally saved traffic for ${pending.deviceLabel}, including traffic hidden by filters. " +
+                        "Its pairing will remain saved." +
+                        if (connected) " The device is connected, so its tab will remain visible." else "",
+                    confirmText = if (connected) "Clear traffic" else "Clear and close",
+                    onConfirm = { deviceWorkspaces.confirmClear()?.let(traffic::clearSource) },
+                    onDismissRequest = deviceWorkspaces::dismissClear,
                 )
             }
-        }
-        devices.clearConfirmation?.let { pending ->
-            val connected = devices.devices.any { entry ->
-                entry.device.id == pending.source.id && entry.status != DevicePresenceStatus.OFFLINE
-            }
-            ConfirmDialog(
-                title = if (connected) "Clear this device's traffic?" else "Clear traffic and close this tab?",
-                message = "Remove all locally saved traffic for ${pending.deviceLabel}, including traffic hidden by filters. " +
-                    "Its pairing will remain saved." +
-                    if (connected) " The device is connected, so its tab will remain visible." else "",
-                confirmText = if (connected) "Clear traffic" else "Clear and close",
-                onConfirm = { deviceWorkspaces.confirmClear()?.let(traffic::clearSource) },
-                onDismissRequest = deviceWorkspaces::dismissClear,
-            )
         }
     }
 }

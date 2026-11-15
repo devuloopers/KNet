@@ -81,3 +81,12 @@ Endpoint-aware preparation exposes verified persisted-query source with hash/pro
 state. Query source from a lookup never hydrates editable GET/POST query fields. Explicit Query edits synchronize
 existing APQ hashes and the Extensions buffer; variable/tab changes preserve untouched source and metadata.
 The same adapters serve API Studio and interception. See `docs/graphql_persisted_queries.md`.
+
+## Shared execution Copy
+
+Owns the Traffic/API Studio typed preset catalogue and an execution-copy presentation ViewModel.
+The ViewModel calls `PrepareStudioCopyUseCase`, fences execution changes and never retains payloads.
+The reusable action binds actual server-response eligibility to the design-system split control.
+Canonical source resolution, decoding and rendering remain below UI; popup geometry/navigation belongs
+to `:ui:core`. The existing response summary accepts a copy-action slot beside Export.
+See `docs/api_studio_copy.md`.

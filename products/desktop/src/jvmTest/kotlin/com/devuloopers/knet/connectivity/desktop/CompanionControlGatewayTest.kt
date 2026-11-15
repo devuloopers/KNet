@@ -1,5 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop
 
+import com.devuloopers.knet.companion.model.CompanionDesktopCaptureState
+import com.devuloopers.knet.companion.model.CompanionCaptureStatusCodec
 import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
 import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.application.contract.pairing.PairingCryptography
@@ -263,11 +265,45 @@ class CompanionControlGatewayTest {
         } finally { fixture.close() }
     }
 
+    @Test fun captureReadinessIsPerDeviceAuthenticatedNegotiatedAndRestoredOnReconnect() = kotlinx.coroutines.runBlocking {
+        val a = RegisteredDeviceId("device-1"); val b = RegisteredDeviceId("device-2")
+        val captures = MutableStateFlow(mapOf(a to CompanionDesktopCaptureState.STOPPED, b to CompanionDesktopCaptureState.CAPTURING))
+        val fixture = ktorFixture(captures = captures)
+        try {
+            val secretB = pairDevice(fixture.pairing, setOf(DeviceScope.PROXY_STREAM), b.value)
+            fun read(id: RegisteredDeviceId, secret: String) = fixture.client.send(
+                java.net.http.HttpRequest.newBuilder(java.net.URI("https://localhost:${fixture.port}${CompanionControlProtocol.CAPTURE_STATUS_PATH}"))
+                    .header("Authorization", "Bearer ${id.value}:$secret").GET().build(), java.net.http.HttpResponse.BodyHandlers.ofByteArray())
+            assertEquals(CompanionDesktopCaptureState.STOPPED, CompanionCaptureStatusCodec.decode(read(a, fixture.credential).body()))
+            assertEquals(CompanionDesktopCaptureState.CAPTURING, CompanionCaptureStatusCodec.decode(read(b, secretB).body()))
+            assertEquals(401, read(a, secretB).statusCode())
+            val legacy = fixture.connect("Bearer ${b.value}:$secretB")
+            legacy.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+            assertEquals("WELCOME", legacy.next().kind.name); legacy.nextConfiguration()
+            assertEquals(null, legacy.messages.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+            val peer = fixture.connect("Bearer ${a.value}:${fixture.credential}", captureUpdates = true)
+            peer.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+            assertEquals("WELCOME", peer.next().kind.name)
+            val initial = listOf(peer.next(), peer.next())
+            assertEquals(CompanionDesktopCaptureState.STOPPED, initial.single { it.kind.name == "CAPTURE_STATUS" }.captureStatus)
+            captures.value += a to CompanionDesktopCaptureState.CAPTURING
+            val update = peer.next()
+            assertEquals("CAPTURE_STATUS", update.kind.name)
+            assertEquals(2, update.revision.toInt()); assertEquals(CompanionDesktopCaptureState.CAPTURING, update.captureStatus)
+            assertEquals(null, legacy.messages.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+            fixture.restart()
+            val restored = fixture.connect("Bearer ${a.value}:${fixture.credential}", captureUpdates = true)
+            restored.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+            assertEquals("WELCOME", restored.next().kind.name)
+            assertEquals(CompanionDesktopCaptureState.CAPTURING, listOf(restored.next(), restored.next()).single { it.kind.name == "CAPTURE_STATUS" }.captureStatus)
+        } finally { fixture.close() }
+    }
+
     private suspend fun eventually(predicate: () -> Boolean) {
         kotlinx.coroutines.withTimeout(5_000) { while (!predicate()) kotlinx.coroutines.delay(10) }
     }
 
-    private suspend fun ktorFixture(maximumSessions: Int = 8, scopedPolicies: MutableStateFlow<Map<RegisteredDeviceId, PacketConditionConfiguration>>? = null): KtorFixture {
+    private suspend fun ktorFixture(maximumSessions: Int = 8, scopedPolicies: MutableStateFlow<Map<RegisteredDeviceId, PacketConditionConfiguration>>? = null, captures: MutableStateFlow<Map<RegisteredDeviceId, CompanionDesktopCaptureState>>? = null): KtorFixture {
         val authority = CertificateAuthority.generate()
         val leaf = LeafCertificateGenerator.generate("localhost", authority)
         val keyStore = KeyStore.getInstance("PKCS12").apply {
@@ -280,10 +316,12 @@ class CompanionControlGatewayTest {
         val presence = com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator({ System.nanoTime() / 1_000_000 })
         val handler = CompanionControlGateway("127.0.0.1", 0, serverFactory(authority), { authority.certificate.encoded },
             pairing, redemptionUseCase(), packetConditions = { policies.value }, nowEpochMillis = { 1_000L },
-            packetConditionsForDevice = scopedPolicies?.let { state -> { id -> state.value[id] ?: PacketConditionConfiguration.Disabled } })
+            packetConditionsForDevice = scopedPolicies?.let { state -> { id -> state.value[id] ?: PacketConditionConfiguration.Disabled } },
+            captureStatusForDevice = captures?.let { state -> { id -> state.value[id] ?: CompanionDesktopCaptureState.STOPPED } })
         val gateway = com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway("127.0.0.1", 0, keyStore,
             handler, pairing, presence, policies, maximumSessions,
-            policiesForDevice = scopedPolicies?.let { state -> { id -> state.map { it[id] ?: PacketConditionConfiguration.Disabled }.distinctUntilChanged() } })
+            policiesForDevice = scopedPolicies?.let { state -> { id -> state.map { it[id] ?: PacketConditionConfiguration.Disabled }.distinctUntilChanged() } },
+            captureStatusForDevice = captures?.let { state -> { id -> state.map { it[id] ?: CompanionDesktopCaptureState.STOPPED }.distinctUntilChanged() } })
         gateway.start()
         val listening = kotlinx.coroutines.withTimeout(10_000) {
             gateway.state.first { it is com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayState.Listening }
@@ -295,7 +333,8 @@ class CompanionControlGatewayTest {
         return KtorFixture(gateway, pairing, credential, policies, presence, listening.port, client) { freshPresence ->
             com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway("127.0.0.1", listening.port,
                 keyStore, handler, pairing, freshPresence, policies, maximumSessions,
-                policiesForDevice = scopedPolicies?.let { state -> { id -> state.map { it[id] ?: PacketConditionConfiguration.Disabled }.distinctUntilChanged() } })
+                policiesForDevice = scopedPolicies?.let { state -> { id -> state.map { it[id] ?: PacketConditionConfiguration.Disabled }.distinctUntilChanged() } },
+            captureStatusForDevice = captures?.let { state -> { id -> state.map { it[id] ?: CompanionDesktopCaptureState.STOPPED }.distinctUntilChanged() } })
         }
     }
 
@@ -316,11 +355,12 @@ class CompanionControlGatewayTest {
                 gateway.state.first { it is com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayState.Listening }
             }
         }
-        fun connect(authorization: String, origin: String? = null): TestWebSocket {
+        fun connect(authorization: String, origin: String? = null, captureUpdates: Boolean = false): TestWebSocket {
             val listener = TestWebSocket()
             val builder = client.newWebSocketBuilder().header("Authorization", authorization)
                 .connectTimeout(5.seconds.toJavaDuration())
             origin?.let { builder.header("Origin", it) }
+            if (captureUpdates) builder.header(com.devuloopers.knet.companion.model.CompanionSessionProtocol.CAPTURE_STATUS_HEADER, "1")
             listener.socket = builder.buildAsync(java.net.URI("wss://localhost:$port/companion/session"), listener).get(5, java.util.concurrent.TimeUnit.SECONDS)
             peers += listener
             return listener

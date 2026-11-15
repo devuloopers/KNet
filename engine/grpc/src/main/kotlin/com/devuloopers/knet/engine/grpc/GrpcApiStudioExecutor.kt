@@ -133,9 +133,10 @@ class GrpcApiStudioExecutor(
                 .setRequestMarshaller(ByteArrayMarshaller)
                 .setResponseMarshaller(ByteArrayMarshaller)
                 .build()
+            val responseEvidence = GrpcServerResponseEvidence()
             val call = channel.newCall(
                 method,
-                CallOptions.DEFAULT.withDeadlineAfter(draft.deadlineMillis, TimeUnit.MILLISECONDS),
+                CallOptions.DEFAULT.withDeadlineAfter(draft.deadlineMillis, TimeUnit.MILLISECONDS).withStreamTracerFactory(responseEvidence),
             )
             val sequence = AtomicLong(0L)
             val terminal = AtomicBoolean(false)
@@ -196,6 +197,11 @@ class GrpcApiStudioExecutor(
             ))
             call.start(
                 object : ClientCall.Listener<ByteArray>() {
+                    override fun onHeaders(headers: Metadata) {
+                        trySend(ApiStudioProtocolExecutionEvent.Started("Server response headers", serverResponseReceived = true,
+                            responseHeaders = headers.presentationEntries()))
+                    }
+
                     override fun onMessage(message: ByteArray) {
                         publishMessage(ApiStudioProtocolMessageDirection.INBOUND, message)
                         call.request(1)
@@ -218,6 +224,7 @@ class GrpcApiStudioExecutor(
                             trySend(ApiStudioProtocolExecutionEvent.Failed(
                                 code = status.code.name,
                                 message = status.description ?: status.code.name,
+                                serverResponseReceived = responseEvidence.present,
                                 retryable = status.code.isRetryable,
                                 actualProtocol = "HTTP/2",
                                 trailers = trailers.presentationEntries(),

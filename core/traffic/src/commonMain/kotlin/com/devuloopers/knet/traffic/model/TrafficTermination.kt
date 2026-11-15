@@ -52,6 +52,8 @@ public sealed interface TrafficTerminationReason {
         DUPLEX_IO_FAILED(TrafficTerminationCode("duplex_io_failed")),
         DUPLEX_PEER_CLOSED(TrafficTerminationCode("duplex_peer_closed")),
         DUPLEX_WRITE_FAILED(TrafficTerminationCode("duplex_write_failed")),
+        /** One input ended and the remaining raw tunnel direction made no progress during its drain grace. */
+        TUNNEL_HALF_CLOSE_IDLE_TIMEOUT(TrafficTerminationCode("tunnel_half_close_idle_timeout")),
         READ_TIMED_OUT(TrafficTerminationCode("read_timeout")),
         WRITE_TIMED_OUT(TrafficTerminationCode("write_timeout")),
     }

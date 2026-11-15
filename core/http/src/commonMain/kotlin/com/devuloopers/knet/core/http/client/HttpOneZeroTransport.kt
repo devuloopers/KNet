@@ -39,6 +39,7 @@ internal data class HttpTransportResponse(
     val protocol: ApplicationProtocol,
     val headers: List<Pair<String, String>>,
     val body: ByteArray,
+    val sentRequest: com.devuloopers.knet.domain.clientNetwork.executor.HttpSentRequest? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -71,6 +72,7 @@ internal data class HttpTransportResponseHead(
     val reasonPhrase: String,
     val protocol: ApplicationProtocol,
     val headers: List<Pair<String, String>>,
+    val sentRequest: com.devuloopers.knet.domain.clientNetwork.executor.HttpSentRequest? = null,
 )
 
 /** Emits a real HTTP/1.0 request line on the current platform. */

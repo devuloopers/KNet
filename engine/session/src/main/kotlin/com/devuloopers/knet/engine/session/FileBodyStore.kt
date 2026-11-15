@@ -47,6 +47,15 @@ class FileBodyStore(
     private val objectDirectory = rootDirectory.resolve("objects")
     private val temporaryDirectory = rootDirectory.resolve("tmp")
     private val activeBodyIds = ConcurrentHashMap<String, Unit>()
+    private val exportReadGuard = Any()
+    private var exportReaders = 0
+
+    /** Short acquisition fences both deletion paths; Clear still commits metadata without waiting. */
+    override fun retainExportReads(): AutoCloseable {
+        synchronized(exportReadGuard) { exportReaders++ }
+        val closed = AtomicBoolean(false)
+        return AutoCloseable { if (closed.compareAndSet(false, true)) synchronized(exportReadGuard) { exportReaders-- } }
+    }
 
     init {
         require(SessionFileSecurity.secureDirectory(rootDirectory)) { "Body-store root could not be created." }
@@ -103,11 +112,14 @@ class FileBodyStore(
     }
 
     override suspend fun delete(bodyId: BodyId): BodyDeleteResult = withContext(Dispatchers.IO) {
+        synchronized(exportReadGuard) {
+        check(exportReaders == 0) { "Body deletion deferred while export reads are pinned." }
         check(!activeBodyIds.containsKey(bodyId.value)) { "Cannot delete a body with an active writer." }
         if (Files.deleteIfExists(objectFile(bodyId).toPath())) {
             BodyDeleteResult.DELETED
         } else {
             BodyDeleteResult.NOT_FOUND
+        }
         }
     }
 
@@ -156,11 +168,14 @@ class FileBodyStore(
     }
 
     override suspend fun deleteByStorageKey(key: BodyStorageKey): BodyDeleteResult = withContext(Dispatchers.IO) {
+        synchronized(exportReadGuard) {
+        check(exportReaders == 0) { "Body deletion deferred while export reads are pinned." }
         requireValidStorageKey(key)
         if (Files.deleteIfExists(objectFile(key).toPath())) {
             BodyDeleteResult.DELETED
         } else {
             BodyDeleteResult.NOT_FOUND
+        }
         }
     }
 

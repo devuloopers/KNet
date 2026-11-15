@@ -1133,6 +1133,12 @@ class CompanionViewModelTest {
                                 verifyCertificate,
                                 StartCompanionInspectionUseCase(repository, connect, verifyCertificate, inspection, transport)),
                             observeConnection = ObserveCompanionConnectionUseCase(transport, MutableStateFlow(null), inspection),
+                            observeDesktopCapture = com.devuloopers.knet.companion.application.usecase.ObserveCompanionDesktopCaptureUseCase(MutableStateFlow(com.devuloopers.knet.companion.application.contract.CompanionSessionObservation(
+                                CompanionDesktopId("desktop-1"), "test-run", com.devuloopers.knet.companion.application.contract.CompanionSessionPhase.CONNECTED,
+                                com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.CAPTURING)), repository, inspection,
+                                com.devuloopers.knet.companion.application.usecase.FetchCompanionCaptureStatusUseCase(credentials,
+                                    com.devuloopers.knet.companion.application.contract.CompanionControlTransport {
+                                        com.devuloopers.knet.companion.application.contract.CompanionControlResponse(404, byteArrayOf()) })),
                             observeNetwork = ObserveCompanionNetworkUseCase(network),
                             observeDiscovery = ObserveCompanionDiscoveryUseCase(discovery),
                             maintainEndpoint = MaintainCompanionEndpointUseCase(

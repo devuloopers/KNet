@@ -16,6 +16,7 @@ internal fun companionPresentationModule(): Module = module {
             observeCertificateEnrollments = get(),
             switchDesktop = get(),
             observeConnection = get(),
+            observeDesktopCapture = get(),
             observeNetwork = get(),
             observeDiscovery = get(),
             maintainEndpoint = get(),

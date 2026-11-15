@@ -23,6 +23,22 @@ class Probe : Instrumentation() {
             val store=KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null); setCertificateEntry("fixture",certificate) }
             val managers=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(store) }
             val ssl=SSLContext.getInstance("TLS").apply { init(null,managers.trustManagers,null) }
+            if (options.getString("mode") == "halfclose") {
+                val address="127.0.0.1:${options.getString("originPort")}"
+                (ssl.socketFactory.createSocket("127.0.0.1",19292) as SSLSocket).use { socket ->
+                    socket.soTimeout=10_000
+                    socket.outputStream.write("CONNECT $address HTTP/1.1\r\nHost: $address\r\nProxy-Authorization: Bearer ${options.getString("device")}:${options.getString("credential")}\r\n\r\n".toByteArray())
+                    socket.outputStream.flush()
+                    check(readHeader(socket.inputStream).startsWith("HTTP/1.1 200"))
+                    socket.outputStream.write(42); socket.outputStream.flush()
+                    socket.shutdownOutput()
+                    check(socket.inputStream.read() == -1)
+                }
+                result.putString("passed","true")
+                result.putString("elapsedMillis",((System.nanoTime()-started)/1_000_000).toString())
+                finish(Activity.RESULT_OK,result)
+                return
+            }
             val upload=options.getString("upload")=="true"
             val bytes=12_500
             val payload=if(upload) ByteArray(bytes) { 66 } else byteArrayOf()

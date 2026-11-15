@@ -1,5 +1,7 @@
 package com.devuloopers.knet.application.usecase.apistudio
 
+import com.devuloopers.knet.application.contract.export.*
+
 import com.devuloopers.knet.application.contract.script.ScriptExecutionCommand
 import com.devuloopers.knet.application.contract.script.ScriptExecutionOutcome
 import com.devuloopers.knet.application.contract.script.ScriptExecutor
@@ -42,12 +44,13 @@ public data class ApiStudioExecutionResult(
     public val formattedBody: String,
     public val mimeType: MimeType,
     public val testResults: List<ScriptAssertion>,
-    public val consoleLogs: List<String>
+    public val consoleLogs: List<String>,
+    public val exportSession: StudioExportSession? = null,
 )
 
 /** Ordered API Studio HTTP execution events, retaining the existing terminal result contract. */
 public sealed interface ApiStudioHttpExecutionEvent {
-    public data class ResponseHead(public val value: HttpExecutionResponseHead) : ApiStudioHttpExecutionEvent
+    public data class ResponseHead(public val value: HttpExecutionResponseHead, public val exportSession: StudioExportSession? = null) : ApiStudioHttpExecutionEvent
     public data class BodyChunk(public val value: HttpExecutionBodyChunk) : ApiStudioHttpExecutionEvent
     public data class Completed(public val value: ApiStudioExecutionResult) : ApiStudioHttpExecutionEvent
 }
@@ -67,7 +70,8 @@ public class ExecuteApiStudioRequestUseCase(
     private val executeRequest: ExecuteClientApiRequestUseCase,
     private val formatResponseBody: FormatResponseBodyUseCase,
     private val scriptExecution: ScriptExecutor,
-    private val ioDispatcher: CoroutineDispatcher
+    private val ioDispatcher: CoroutineDispatcher,
+    private val exportRecorder: StudioExportRecorder? = null,
 ) {
 
     /**
@@ -105,24 +109,37 @@ public class ExecuteApiStudioRequestUseCase(
         proxyPort: Int?,
     ): Flow<ApiStudioHttpExecutionEvent> = flow {
         val prepared = prepare(request)
-        executeRequest.stream(
-            url = prepared.url,
-            method = request.method,
-            headers = prepared.headers,
-            queryParams = prepared.queryParameters,
-            cookies = prepared.cookies,
-            body = prepared.outboundBody,
-            auth = request.auth,
-            proxyPort = proxyPort,
-            httpVersionPreference = request.httpVersionPreference,
-        ).collect { event ->
-            when (event) {
-                is HttpExecutionEvent.ResponseHead -> emit(ApiStudioHttpExecutionEvent.ResponseHead(event.value))
-                is HttpExecutionEvent.BodyChunk -> emit(ApiStudioHttpExecutionEvent.BodyChunk(event.value))
-                is HttpExecutionEvent.Completed -> emit(
-                    ApiStudioHttpExecutionEvent.Completed(complete(request, prepared, event.result)),
-                )
+        val sentUrl = if (prepared.queryParameters.isNotEmpty()) UrlQueryStringParser.rebuildUrlWithQueryParams(prepared.url, prepared.queryParameters) else prepared.url
+        val sentHeaders = prepared.headers.toMutableMap().apply {
+            if (prepared.cookies.isNotEmpty() && keys.none { it.equals("cookie", true) })
+                put("Cookie", prepared.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
+        }
+        val archive = try { exportRecorder?.http(StudioExportHttpRequest(sentUrl, request.method, sentHeaders.toList(), prepared.outboundBody))?.isolated() }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (_: Exception) { null }
+        try {
+            executeRequest.stream(
+                url = prepared.url, method = request.method, headers = prepared.headers,
+                queryParams = prepared.queryParameters, cookies = prepared.cookies, body = prepared.outboundBody,
+                auth = request.auth, proxyPort = proxyPort, httpVersionPreference = request.httpVersionPreference,
+            ).collect { event ->
+                when (event) {
+                    is HttpExecutionEvent.ResponseHead -> {
+                        archive?.response(event.value)
+                        emit(ApiStudioHttpExecutionEvent.ResponseHead(event.value, archive))
+                    }
+                    is HttpExecutionEvent.BodyChunk -> {
+                        archive?.append(event.value.copyBytes())
+                        emit(ApiStudioHttpExecutionEvent.BodyChunk(event.value))
+                    }
+                    is HttpExecutionEvent.Completed -> {
+                        archive?.complete(event.result)
+                        emit(ApiStudioHttpExecutionEvent.Completed(complete(request, prepared, event.result).copy(exportSession = archive)))
+                    }
+                }
             }
+        } finally {
+            archive?.interrupted()
+            if (archive?.eligible?.value == false) archive.release()
         }
     }.flowOn(ioDispatcher)
 

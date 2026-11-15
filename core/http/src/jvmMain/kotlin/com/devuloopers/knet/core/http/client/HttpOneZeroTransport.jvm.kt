@@ -86,14 +86,14 @@ private class HttpOneZeroSocketTransport(
                     uri.originForm()
                 }
                 val encodedBody = request.body.encodeForTransport()
-                writeRequest(
+                val sent = writeRequest(
                     output = transportSocket.getOutputStream(),
                     request = request,
                     target = target,
                     requestTarget = requestTarget,
                     encodedBody = encodedBody,
                 )
-                readResponse(transportSocket.getInputStream(), request.method.token)
+                readResponse(transportSocket.getInputStream(), request.method.token).copy(sentRequest = sent)
             } finally {
                 if (closeTransportSeparately) transportSocket.close()
             }
@@ -154,7 +154,7 @@ private class HttpOneZeroSocketTransport(
         target: TargetEndpoint,
         requestTarget: String,
         encodedBody: EncodedTransportBody,
-    ) {
+    ): com.devuloopers.knet.domain.clientNetwork.executor.HttpSentRequest {
         val headers = LinkedHashMap<String, String>()
         request.headers.forEach { (name, value) ->
             if (name.isNotBlank() && value.isNotBlank() && name.isSafeHeaderName() && value.isSafeHeaderValue()) {
@@ -181,6 +181,8 @@ private class HttpOneZeroSocketTransport(
         output.write(head.toByteArray(Charsets.ISO_8859_1))
         if (encodedBody.bytes.isNotEmpty()) output.write(encodedBody.bytes)
         output.flush()
+        return com.devuloopers.knet.domain.clientNetwork.executor.HttpSentRequest(request.url, request.method.token,
+            headers.toList(), com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionBytes(encodedBody.bytes))
     }
 
     private fun readResponse(input: InputStream, requestMethod: String): HttpTransportResponse {

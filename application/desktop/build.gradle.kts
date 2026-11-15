@@ -15,6 +15,7 @@ dependencies {
     api(project(":core:identity"))
     api(project(":core:pairing"))
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)

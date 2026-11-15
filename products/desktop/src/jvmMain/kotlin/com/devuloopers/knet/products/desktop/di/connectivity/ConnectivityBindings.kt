@@ -79,6 +79,7 @@ import kotlin.uuid.Uuid
 
 /** Pairing, network discovery, setup delivery, and desktop connectivity mechanisms. */
 internal val connectivityBindings: Module = module {
+    single { com.devuloopers.knet.application.usecase.device.ObserveCompanionCaptureStatusUseCase(get()) }
     single { IngressAttributionRegistry() }
     single<IngressAttributionLookup> { get<IngressAttributionRegistry>() }
     single<IngressAttributionRegistration> { get<IngressAttributionRegistry>() }
@@ -264,6 +265,7 @@ internal val connectivityBindings: Module = module {
             invitationCodec = get(),
             endpointDescriptor = { discovery.load().endpointDescriptor() },
             packetConditions = { PacketConditionConfiguration.Disabled },
+            captureStatusForDevice = { id -> get<com.devuloopers.knet.application.usecase.device.ObserveCompanionCaptureStatusUseCase>().current(id) },
             packetConditionsForDevice = { id ->
                 get<com.devuloopers.knet.application.contract.device.DevicePolicyLibrary>().snapshot.value
                     .runtimeNetwork(com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(id)).toPacketConditionConfiguration()
@@ -282,6 +284,7 @@ internal val connectivityBindings: Module = module {
                     state.runtimeNetwork(com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(id)).toPacketConditionConfiguration()
                 }
             },
+            captureStatusForDevice = { id -> get<com.devuloopers.knet.application.usecase.device.ObserveCompanionCaptureStatusUseCase>().observe(id) },
         )
     }
     single { CompanionControlGatewayRuntime(get<com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway>()) }

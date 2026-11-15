@@ -30,6 +30,10 @@ data class ExecutionResult(
     val errorMessage: String? = null,
     val failureReason: NetworkFailureReason? = null,
     val protocol: ApplicationProtocol? = null,
+    /** Original metadata and bytes for export, independent of decoded response presentation. */
+    val orderedHeaders: List<Pair<String, String>> = headers.toList(),
+    val rawResponse: com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionBytes? = null,
+    val sentRequest: com.devuloopers.knet.domain.clientNetwork.executor.HttpSentRequest? = null,
 ) {
     /** Compatibility-free convenience derived from the canonical total timing. */
     val latencyMs: Long

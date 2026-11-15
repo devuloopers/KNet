@@ -44,6 +44,7 @@ public class KtorCompanionControlGateway(
     private val policies: Flow<PacketConditionConfiguration>,
     private val maximumSessions: Int = 128,
     private val policiesForDevice: ((com.devuloopers.knet.identity.RegisteredDeviceId) -> Flow<PacketConditionConfiguration>)? = null,
+    private val captureStatusForDevice: ((RegisteredDeviceId) -> Flow<CompanionDesktopCaptureState>)? = null,
 ) : CompanionControlGatewayLifecycle {
     private val mutableState = MutableStateFlow<CompanionControlGatewayState>(CompanionControlGatewayState.Stopped)
     private val closed = AtomicBoolean(false)
@@ -151,6 +152,14 @@ public class KtorCompanionControlGateway(
             sendCompanionControlMessage(outgoing, CompanionSessionMessage(CompanionSessionMessageKind.WELCOME, first.runId))
             var revision = 0L
             var currentPolicy: PacketConditionConfiguration? = null
+            // Older clients use strict decoders. Never send a new operation without handshake opt-in.
+            val captureUpdater = if (call.request.headers[CompanionSessionProtocol.CAPTURE_STATUS_HEADER] == "1" && captureStatusForDevice != null) launch {
+                var captureRevision = 0L
+                captureStatusForDevice.invoke(authorization.deviceId).distinctUntilChanged().collect { status ->
+                    sendCompanionControlMessage(outgoing, CompanionSessionMessage(CompanionSessionMessageKind.CAPTURE_STATUS,
+                        first.runId, revision = ++captureRevision, captureStatus = status))
+                }
+            } else null
             val policyLock = kotlinx.coroutines.sync.Mutex()
             val updater = launch {
                 (policiesForDevice?.invoke(authorization.deviceId) ?: policies).distinctUntilChanged().collect { configuration ->
@@ -201,7 +210,7 @@ public class KtorCompanionControlGateway(
                         else -> error("Unexpected client control operation.")
                     }
                 }
-            } finally { updater.cancelAndJoin(); renewer.cancelAndJoin() }
+            } finally { updater.cancelAndJoin(); renewer.cancelAndJoin(); captureUpdater?.cancelAndJoin() }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "invalid_control_session")) }
         finally { token?.let { generation -> if (!explicitStop) presence.disconnected(authorization.deviceId, generation) } }

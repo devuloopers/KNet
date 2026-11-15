@@ -151,12 +151,12 @@ internal val apiStudioBindings: Module = module {
 
     factory { ExecuteClientApiRequestUseCase(get()) }
     factory { FormatResponseBodyUseCase() }
-    factory { ExecuteApiStudioRequestUseCase(get(), get(), get(), Dispatchers.IO) }
+    factory { ExecuteApiStudioRequestUseCase(get(), get(), get(), Dispatchers.IO, get()) }
     factory { ImportApiStudioProtocolSchemaUseCase(get()) }
     factory { ListApiStudioProtocolOperationsUseCase(get()) }
     factory { CreateApiStudioProtocolDocumentUseCase(get()) }
     factory { ReadApiStudioProtocolDocumentUseCase(get()) }
-    factory { ExecuteApiStudioProtocolDocumentUseCase(get()) }
+    factory { ExecuteApiStudioProtocolDocumentUseCase(get(), get(), get()) }
     factory { SaveApiStudioProtocolSchemaUseCase(get()) }
     factory { LoadApiStudioProtocolSchemaUseCase(get()) }
     factory { ObserveApiStudioWorkspaceDocumentsUseCase(get()) }
@@ -167,7 +167,7 @@ internal val apiStudioBindings: Module = module {
     factory { RenameApiStudioWorkspaceDocumentUseCase(get()) }
     factory { PromoteApiStudioWorkspaceDocumentUseCase(get()) }
     factory { ReflectApiStudioProtocolSchemaUseCase(get()) }
-    factory { OpenApiStudioProtocolSessionUseCase(get()) }
+    factory { OpenApiStudioProtocolSessionUseCase(get(), get(), get()) }
     factory { ImportRequestToStudioUseCase() }
     factory { ObserveCollectionsUseCase(get()) }
     factory { ObserveUnsavedRequestsUseCase(get()) }

@@ -76,6 +76,7 @@ class GraphQLWebSocketStudioViewModel(
     /** Opens a durable document or restores a transient blank editor. */
     fun openWorkspaceDocument(documentId: String?) {
         if (documentId != null && documentId == mutableState.value.documentId) return
+        mutableState.value.exportSession?.release()
         cancelSession()
         autoSaveJob?.cancel()
         documentLoadJob?.cancel()
@@ -171,6 +172,7 @@ class GraphQLWebSocketStudioViewModel(
 
     /** Opens a capture-aware subscription session after strict engine validation. */
     fun connect() {
+        mutableState.value.exportSession?.release()
         val document = createExecutionDocument(mutableState.value).getOrElse { error ->
             mutableState.update { state ->
                 state.copy(errorMessage = error.message ?: "The GraphQL subscription is invalid.")
@@ -188,11 +190,13 @@ class GraphQLWebSocketStudioViewModel(
             }
             return
         }
+        mutableState.update { it.copy(exportSession = session.exportSession) }
         activeSession = session
         mutableState.update { state ->
             state.copy(
                 isConnecting = true,
                 isConnected = false,
+                exportSession = session.exportSession,
                 events = emptyList(),
                 selectedEventIndex = null,
                 errorMessage = null,
@@ -280,6 +284,7 @@ class GraphQLWebSocketStudioViewModel(
             val events = (state.events + event).takeLast(MAXIMUM_VISIBLE_EVENTS)
             state.copy(
                 events = events,
+                exportSession = (event as? ApiStudioProtocolExecutionEvent.Started)?.exportSession ?: state.exportSession,
                 selectedEventIndex = if (event is ApiStudioProtocolExecutionEvent.Message) {
                     events.lastIndex
                 } else {
@@ -387,6 +392,7 @@ class GraphQLWebSocketStudioViewModel(
     }
 
     override fun onCleared() {
+        mutableState.value.exportSession?.release()
         activeSession?.cancel()
         super.onCleared()
     }

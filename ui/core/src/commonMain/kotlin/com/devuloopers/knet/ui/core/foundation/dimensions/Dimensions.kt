@@ -20,6 +20,8 @@ data class Dimensions(
     /** Space reserved for native macOS traffic lights when drawing into full-window content. */
     val nativeWindowControlsInset: Dp = 84.dp,
     val toolbarHeight: Dp = 32.dp,
+    /** Bounds optional operational status text so scrollable toolbars retain practical travel distance. */
+    val toolbarStatusMaxWidth: Dp = 240.dp,
     /** Shared manager headers reserve consistent title/subtitle height before feature content begins. */
     val screenHeaderMinHeight: Dp = 48.dp,
     val statusBarHeight: Dp = 24.dp,
@@ -48,6 +50,9 @@ data class Dimensions(
     val borderWidth: Dp = 1.dp,
     val dividerThickness: Dp = 1.dp,
     // Responsive Layout & Window Sizing Tokens
+    /** Shared context menus keep one-line action labels and expose adjacent child panels. */
+    val contextMenuMinWidth: Dp = 200.dp,
+    val contextMenuMaxWidth: Dp = 320.dp,
     val toolbarButtonMinWidth: Dp = 32.dp,
     val searchFieldMinWidth: Dp = 160.dp,
     val inspectorMinWidth: Dp = 320.dp,
@@ -58,6 +63,10 @@ data class Dimensions(
     /** Metadata scrolls independently so it cannot displace the selected message payload. */
     val inspectorMessageMetadataMaxHeight: Dp = 180.dp,
     val dialogWidthMedium: Dp = 520.dp,
+    /** Shared capture/file action surfaces use one bounded, scrollable desktop layout. */
+    val dialogWidthLarge: Dp = 680.dp,
+    val dialogContentMaxHeight: Dp = 700.dp,
+    val fileDropTargetHeight: Dp = 120.dp,
     val sideDrawerWidth: Dp = 720.dp,
     val expandedSideDrawerWidth: Dp = 880.dp,
     val minimumWindowWidth: Dp = 1024.dp,

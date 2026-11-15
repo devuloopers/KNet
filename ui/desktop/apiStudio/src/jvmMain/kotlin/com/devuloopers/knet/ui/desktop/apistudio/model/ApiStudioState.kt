@@ -20,6 +20,8 @@ import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 data class ApiStudioState(
     val editorState: RequestEditorState = RequestEditorState(),
     val responseInspection: ResponseInspectorState? = null,
+    /** Original execution archive, independent of draft edits and formatted response previews. */
+    val exportSession: com.devuloopers.knet.application.contract.export.StudioExportSession? = null,
     val executionState: ExecutionState = ExecutionState.IDLE,
     val errorMessage: String? = null,
     val sessionContext: SessionContext = SessionContext.None,

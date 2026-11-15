@@ -15,6 +15,7 @@ public enum class CompanionSessionMessageKind {
     /** Renews only an already applied policy revision. */ POLICY_RENEWAL,
     /** Reports the native owner's actual application outcome. */ POLICY_ACK,
     /** Ends a no-longer-authorized channel. */ REVOKED,
+    /** Recording state sent only to clients advertising the readiness capability in their handshake. */ CAPTURE_STATUS,
 }
 
 /** Native policy owner acknowledgement; transport receipt alone is never reported as applied. */
@@ -26,6 +27,7 @@ public enum class CompanionPolicyAcknowledgement { APPLIED, INACTIVE, UNSUPPORTE
  * The VPN run and sequence fence late frames, while revision fences stale policy updates after reconnect.
  */
 @Serializable
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
 public data class CompanionSessionMessage(
     /** Closed operation code checked against the allowed direction. */
     public val kind: CompanionSessionMessageKind,
@@ -41,6 +43,9 @@ public data class CompanionSessionMessage(
     public val acknowledgement: CompanionPolicyAcknowledgement? = null,
     /** Strict protocol version; future versions require explicit negotiation. */
     public val version: Int = CompanionSessionProtocol.VERSION,
+    /** Absent from every legacy envelope; optional capability negotiation preserves strict older clients. */
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    public val captureStatus: CompanionDesktopCaptureState? = null,
 ) {
     init {
         require(version == CompanionSessionProtocol.VERSION)
@@ -48,8 +53,9 @@ public data class CompanionSessionMessage(
         require(sequence >= 0L && revision >= 0L)
         require((kind == CompanionSessionMessageKind.CONFIGURATION) == (configuration != null))
         require((kind == CompanionSessionMessageKind.POLICY_ACK) == (acknowledgement != null))
+        require((kind == CompanionSessionMessageKind.CAPTURE_STATUS) == (captureStatus != null))
         require(kind !in setOf(CompanionSessionMessageKind.CONFIGURATION, CompanionSessionMessageKind.POLICY_RENEWAL,
-            CompanionSessionMessageKind.POLICY_ACK) || revision > 0L)
+            CompanionSessionMessageKind.POLICY_ACK, CompanionSessionMessageKind.CAPTURE_STATUS) || revision > 0L)
     }
 }
 
@@ -59,6 +65,8 @@ public object CompanionSessionProtocol {
     public const val VERSION: Int = 1
     /** Authenticated route on the existing HTTPS control endpoint. */
     public const val PATH: String = "/companion/session"
+    /** Handshake opt-in; old desktops ignore this header and retain their existing protocol. */
+    public const val CAPTURE_STATUS_HEADER: String = "X-KNet-Capture-Status"
     /** Bound applies to encoded messages as well as WebSocket framing. */
     public const val MAXIMUM_MESSAGE_BYTES: Int = 8192
     /** Policy authorization must renew before the existing five-second safety lease expires. */

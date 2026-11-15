@@ -1,5 +1,8 @@
 package com.devuloopers.knet.core.http.client
 
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpSentRequest
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionBytes
+
 import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import kotlinx.coroutines.Dispatchers
@@ -111,6 +114,9 @@ internal actual class HttpTwoTransport actual constructor() {
             protocol = ApplicationProtocol.fromToken(response.version().displayName()),
             headers = response.headers().map().flatMap { (name, values) -> values.map { value -> name to value } },
             body = response.body(),
+            sentRequest = HttpSentRequest(response.request().uri().toString(), response.request().method(),
+                response.request().headers().map().flatMap { (name, values) -> values.map { name to it } },
+                HttpExecutionBytes(if (response.request().method() == request.method.token) encodedBody.bytes else byteArrayOf())),
         )
     }
 
@@ -134,6 +140,9 @@ internal actual class HttpTwoTransport actual constructor() {
             reasonPhrase = "",
             protocol = ApplicationProtocol.fromToken(response.version().displayName()),
             headers = headers,
+            sentRequest = HttpSentRequest(response.request().uri().toString(), response.request().method(),
+                response.request().headers().map().flatMap { (name, values) -> values.map { name to it } },
+                HttpExecutionBytes(if (response.request().method() == request.method.token) encodedBody.bytes else byteArrayOf())),
         )
         onResponseHead(head)
         val retainTerminalBody = !headers.isIdentityEventStreamHeaders()
@@ -162,6 +171,7 @@ internal actual class HttpTwoTransport actual constructor() {
             reasonPhrase = head.reasonPhrase,
             protocol = head.protocol,
             headers = head.headers,
+            sentRequest = head.sentRequest,
             body = retained.toByteArray(),
         )
     }

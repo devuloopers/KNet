@@ -30,6 +30,8 @@ data class GraphQLWebSocketStudioState(
     val extensionsJson: String = "",
     val operationId: String = "",
     val selectedAuthoringTab: GraphQLWebSocketAuthoringTab = GraphQLWebSocketAuthoringTab.QUERY,
+    /** Original native execution archive, independent of the rolling visible events. */
+    val exportSession: com.devuloopers.knet.application.contract.export.StudioExportSession? = null,
     val events: List<ApiStudioProtocolExecutionEvent> = emptyList(),
     val selectedEventIndex: Int? = null,
     val isConnecting: Boolean = false,

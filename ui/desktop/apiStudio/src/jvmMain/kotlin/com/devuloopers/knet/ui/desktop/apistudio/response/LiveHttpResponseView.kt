@@ -36,6 +36,8 @@ internal fun LiveHttpResponseView(
     state: ResponseInspectorState,
     actions: ResponseInspectorActions,
     modifier: Modifier = Modifier,
+    exportAction: (@Composable () -> Unit)? = null,
+    copyAction: (@Composable () -> Unit)? = null,
 ) {
     val live = requireNotNull(state.liveResponse)
     val colors = KNetTheme.colors
@@ -56,15 +58,13 @@ internal fun LiveHttpResponseView(
     val listState = rememberLazyListState()
 
     Column(modifier = modifier.fillMaxSize().background(colors.background)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(KNetTheme.spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.md),
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+        com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar(scrollLeading = true, leading = {
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.md)) {
+            Column {
                 Text(
                     text = "${live.protocolLabel} · ${state.statusCode} ${state.statusText}".trim(),
                     style = typography.titleMedium.copy(color = colors.textPrimary, fontWeight = FontWeight.SemiBold),
+                    maxLines = 1, softWrap = false,
                 )
                 Text(
                     text = buildString {
@@ -84,21 +84,25 @@ internal fun LiveHttpResponseView(
                         }
                     },
                     style = typography.caption.copy(color = colors.textSecondary),
+                    maxLines = 1, softWrap = false,
                 )
             }
             KNetSearchField(
                 query = query,
                 onQueryChange = { query = it },
                 placeholder = "Search events",
-                modifier = Modifier.widthIn(min = 180.dp, max = 280.dp),
+                modifier = Modifier.width(KNetTheme.dimensions.searchFieldMinWidth),
             )
+            copyAction?.invoke()
+            exportAction?.invoke()
             KNetButton(
                 onClick = actions.onClearVisibleLiveRecords,
                 variant = ButtonVariant.Secondary,
                 size = ButtonSize.Compact,
                 enabled = live.records.isNotEmpty(),
             ) { Text("Clear events") }
-        }
+          }
+        })
         HorizontalDivider(color = colors.border)
 
         Box(modifier = Modifier.fillMaxWidth().weight(0.44f)) {

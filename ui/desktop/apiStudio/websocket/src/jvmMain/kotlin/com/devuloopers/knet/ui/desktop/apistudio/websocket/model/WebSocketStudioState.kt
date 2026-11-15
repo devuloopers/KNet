@@ -34,6 +34,8 @@ data class WebSocketStudioState(
     val headers: List<ApiStudioProtocolMetadataEntry> = emptyList(),
     val messageKind: WebSocketStudioMessageKind = WebSocketStudioMessageKind.TEXT,
     val messageContent: String = "",
+    /** Original native execution archive, independent of the rolling visible events. */
+    val exportSession: com.devuloopers.knet.application.contract.export.StudioExportSession? = null,
     val events: List<ApiStudioProtocolExecutionEvent> = emptyList(),
     val selectedEventIndex: Int? = null,
     val isConnecting: Boolean = false,

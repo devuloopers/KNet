@@ -28,7 +28,7 @@ internal actual fun Modifier.platformContextMenuGesture(
     awaitPointerEventScope {
         while (true) {
             val event = awaitPointerEvent()
-            if (event.button == PointerButton.Secondary) {
+            if (event.type == PointerEventType.Press && event.button == PointerButton.Secondary) {
                 event.changes.firstOrNull()?.let { change ->
                     onOpen(IntOffset(change.position.x.toInt(), change.position.y.toInt()))
                     change.consume()

@@ -368,6 +368,28 @@ class CompanionRedesignTest {
         }
     }
 
+    @Test fun stoppedDesktopShowsStartCaptureDialogAndRecheckAction() = onUi {
+        fixture(ready().copy(desktopCaptureStatus = CompanionDesktopCaptureState.STOPPED,
+            desktopCaptureNotice = CompanionDesktopCaptureState.STOPPED, captureNoticeFromPreflight = true)) { ui ->
+            assertTrue("Start capture in KNet" in ui.labels())
+            assertTrue(ui.labels().any { "Office Mac" in it && "Start Capture" in it })
+            ui.assertButton("Check again"); ui.click("Check again")
+            assertEquals(listOf<CompanionAction>(CompanionAction.RecheckDesktopCaptureRequested), ui.actions)
+            ui.save("capture-stopped")
+        }
+    }
+    @Test fun pausedForwardingIsExplainedAndRecordingClearsThePrompt() = onUi {
+        fixture(ready().copy(inspection = CompanionInspectionState.Running(CompanionInspectionMode.DEVICE_VPN, 1000, true),
+            desktopCaptureStatus = CompanionDesktopCaptureState.PAUSED, desktopCaptureNotice = CompanionDesktopCaptureState.PAUSED)) { ui ->
+            assertTrue("Desktop capture is not recording" in ui.labels())
+            assertTrue(ui.labels().any { "without recording" in it })
+            ui.click("Got it")
+            assertEquals(listOf<CompanionAction>(CompanionAction.CaptureNoticeDismissed), ui.actions)
+            ui.state.value = ui.state.value.copy(desktopCaptureNotice = null, desktopCaptureStatus = CompanionDesktopCaptureState.CAPTURING)
+            ui.frame(); assertFalse("Desktop capture is not recording" in ui.labels())
+        }
+    }
+
     private fun fixture(state: CompanionUiState, width: Int = 420, height: Int = 920, scale: Float = 1f,
         platform: CertificateInstallationPlatform = CertificateInstallationPlatform.ANDROID, block: (Ui) -> Unit) {
         val ui = Ui(state, width, height)

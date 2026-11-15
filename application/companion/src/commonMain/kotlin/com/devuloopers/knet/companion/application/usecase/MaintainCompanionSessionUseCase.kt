@@ -36,7 +36,8 @@ public class MaintainCompanionSessionUseCase(
         mutableState.value = CompanionSessionObservation(registration.desktopId, runId, CompanionSessionPhase.CONNECTING)
         var rejected = false
         fun report(phase: CompanionSessionPhase) {
-            mutableState.update { observed -> if (observed?.runId == runId) observed.copy(phase = phase) else observed }
+            mutableState.update { observed -> if (observed?.runId == runId && observed.desktopId == registration.desktopId) observed.copy(phase = phase,
+                captureStatus = CompanionDesktopCaptureState.UNKNOWN) else observed }
         }
         val policyLock = Mutex()
         var applied = initiallyApplied
@@ -89,6 +90,7 @@ public class MaintainCompanionSessionUseCase(
                         report(CompanionSessionPhase.CONNECTED)
                         val connectedAt = timeSource.markNow()
                         var revision = 0L
+                        var captureRevision = 0L
                         val identityWatcher = launch {
                             registrations.activeRegistration.first { it != current }
                             releaseConnection(session)
@@ -111,6 +113,14 @@ public class MaintainCompanionSessionUseCase(
                                 require(message.runId == runId)
                                 if (registrations.activeRegistration.value != current) break
                                 when (message.kind) {
+                                    CompanionSessionMessageKind.CAPTURE_STATUS -> {
+                                        require(message.revision > 0)
+                                        if (message.revision > captureRevision) {
+                                            captureRevision = message.revision
+                                            mutableState.update { observed -> if (observed?.runId == runId && observed.desktopId == registration.desktopId)
+                                                observed.copy(captureStatus = requireNotNull(message.captureStatus)) else observed }
+                                        }
+                                    }
                                     CompanionSessionMessageKind.CONFIGURATION -> {
                                         if (message.revision <= revision) continue
                                         val target = checkNotNull(message.configuration)
@@ -182,7 +192,7 @@ public class MaintainCompanionSessionUseCase(
                     }
                     if (failure.reason == CompanionSessionFailure.UNSUPPORTED) {
                         watchdog.cancelAndJoin()
-                        mutableState.update { observed -> observed?.takeUnless { it.runId == runId } }
+                        mutableState.update { observed -> observed?.takeUnless { it.runId == runId && it.desktopId == registration.desktopId } }
                         fallback.execute(current, applied, sink)
                         return@coroutineScope
                     }
@@ -200,7 +210,7 @@ public class MaintainCompanionSessionUseCase(
         } finally { withContext(NonCancellable) {
             watchdog.cancelAndJoin()
             releasePolicy(sink)
-            if (!rejected) mutableState.update { observed -> observed?.takeUnless { it.runId == runId } }
+            if (!rejected) mutableState.update { observed -> observed?.takeUnless { it.runId == runId && it.desktopId == registration.desktopId } }
         } }
     }
 

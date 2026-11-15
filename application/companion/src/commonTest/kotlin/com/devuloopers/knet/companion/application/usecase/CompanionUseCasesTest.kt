@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.application.usecase
 
+import com.devuloopers.knet.companion.model.CompanionDesktopCaptureState
+import com.devuloopers.knet.companion.model.CompanionCaptureStatusCodec
 import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
 import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateArtifact
@@ -720,9 +722,63 @@ class CompanionUseCasesTest {
         suspend fun enrollTarget() { enrollments.complete(CompanionCertificateEnrollment(target.desktopId, target.rootCertificateSha256, 1_000L)) }
     }
 
+    @Test fun stoppedDesktopBlocksBeforeVpnConsentOrTransport() = runTest {
+        for (capture in listOf(CompanionDesktopCaptureState.STOPPED, CompanionDesktopCaptureState.STARTING)) {
+            val fixture = StartEnvironment(CompanionInspectionPreparationResult.ConsentRequired, fetchedCaptureState = capture)
+            val result = assertIs<StartCompanionInspectionResult.Rejected>(fixture.start.execute())
+            assertEquals(CompanionFailureCode.DESKTOP_CAPTURE_STOPPED, result.failure.code)
+            assertNull(fixture.inspection.startedConfiguration)
+            assertEquals(0, fixture.transport.connectCalls)
+        }
+    }
+
+    @Test fun pausedAndLegacyPeersAllowForwardingWithoutClaimingCapture() = runTest {
+        for (capture in listOf(CompanionDesktopCaptureState.PAUSED, CompanionDesktopCaptureState.UNKNOWN, CompanionDesktopCaptureState.CAPTURING)) {
+            val fixture = StartEnvironment(CompanionInspectionPreparationResult.Ready, fetchedCaptureState = capture)
+            val result = assertIs<StartCompanionInspectionResult.Started>(fixture.start.execute())
+            assertEquals(capture, result.desktopCaptureStatus)
+            assertEquals(1, fixture.transport.connectCalls)
+        }
+    }
+
+    @Test fun capturePreflightIsAuthenticatedAndPinnedWithStrictLegacyFallback() = runTest {
+        val registration = registration()
+        val credentials = FakeCredentialStore().apply { values[registration.credentialReference] = "issued-secret-123" }
+        for ((status, body, expected) in listOf(
+            Triple(200, CompanionCaptureStatusCodec.encode(CompanionDesktopCaptureState.PAUSED), CompanionDesktopCaptureState.PAUSED),
+            Triple(404, byteArrayOf(), CompanionDesktopCaptureState.UNKNOWN),
+            Triple(401, byteArrayOf(), CompanionDesktopCaptureState.UNKNOWN),
+            Triple(200, "invalid".encodeToByteArray(), CompanionDesktopCaptureState.UNKNOWN))) {
+            val useCase = FetchCompanionCaptureStatusUseCase(credentials, CompanionControlTransport { request ->
+                assertEquals(CompanionControlOperation.FETCH_CAPTURE_STATUS, request.operation)
+                assertEquals(registration.controlEndpoint, request.endpoint)
+                assertEquals(registration.rootCertificateSha256, request.rootCertificateSha256)
+                assertEquals(registration.deviceId, request.authorization?.deviceId)
+                CompanionControlResponse(status, body)
+            })
+            assertEquals(expected, useCase.execute(registration))
+        }
+        assertEquals(CompanionDesktopCaptureState.UNKNOWN,
+            FetchCompanionCaptureStatusUseCase(credentials, CompanionControlTransport { kotlinx.coroutines.delay(10_000); error("timeout") }).execute(registration))
+        val missing = FetchCompanionCaptureStatusUseCase(FakeCredentialStore(), CompanionControlTransport { error("no credential") })
+        assertEquals(CompanionDesktopCaptureState.UNKNOWN, missing.execute(registration))
+    }
+
+    @Test fun capturePreflightCannotRetargetAChangedDesktopAndPropagatesOwnerCancellation() = runTest {
+        val fixture = StartEnvironment(CompanionInspectionPreparationResult.Ready, fetchedCaptureState = CompanionDesktopCaptureState.CAPTURING)
+        fixture.captureHook = { fixture.repository.mutableActive.value = registration().copy(desktopId = CompanionDesktopId("replacement")) }
+        assertIs<StartCompanionInspectionResult.Rejected>(fixture.start.execute())
+        assertEquals(0, fixture.transport.connectCalls); assertNull(fixture.inspection.startedConfiguration)
+        val credentials = FakeCredentialStore().apply { values[registration().credentialReference] = "issued-secret-123" }
+        kotlin.test.assertFailsWith<kotlinx.coroutines.CancellationException> {
+            FetchCompanionCaptureStatusUseCase(credentials, CompanionControlTransport { throw kotlinx.coroutines.CancellationException("owner cancelled") }).execute(registration())
+        }
+    }
+
     private class StartEnvironment(
         preparation: CompanionInspectionPreparationResult,
         fetchedPacketConditions: PacketConditionConfiguration? = null,
+        fetchedCaptureState: CompanionDesktopCaptureState? = null,
     ) {
         val repository = FakeRegistrationRepository().apply {
             val registration = registration()
@@ -764,6 +820,7 @@ class CompanionUseCasesTest {
                 },
             )
         }
+        var captureHook: () -> Unit = {}
         val start = StartCompanionInspectionUseCase(
             repository,
             connect,
@@ -771,6 +828,10 @@ class CompanionUseCasesTest {
             inspection,
             transport,
             fetchPacketConditions,
+            fetchedCaptureState?.let { capture -> FetchCompanionCaptureStatusUseCase(credentials, CompanionControlTransport {
+                captureHook()
+                CompanionControlResponse(200, CompanionCaptureStatusCodec.encode(capture))
+            }) },
         )
     }
 

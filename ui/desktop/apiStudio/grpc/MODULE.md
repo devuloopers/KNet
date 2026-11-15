@@ -41,3 +41,7 @@ apply the 30-second operational default only when execution begins.
 Unary and server-streaming calls use the bounded batch execution contract. Client-streaming and bidirectional
 calls use the generic interactive-session contract, so future streaming protocols can add their own workspace
 without adding protocol checks to the API Studio shell.
+
+The native response timeline exposes the shared execution Copy split control beside Export. Its menu
+uses the recorded protocol/metadata/message directions and the shell extension slot; layout overflow
+remains owned by `:ui:core`. See `docs/api_studio_copy.md`.

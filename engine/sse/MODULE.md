@@ -41,3 +41,7 @@ The supported bounded post-capture preview remains independently `SUPPORTED`. Li
 `EXPERIMENTAL` until the configured release soak, cross-platform CI execution, and physical Android/iOS Wi-Fi
 proxy evidence are recorded in `docs/sse_qualification.md`. Brotli and Zstandard decoding, automatic reconnect,
 browser `EventSource` policy emulation, and HTTP/3 remain additive future capabilities.
+
+The protocol message presentation adapter exposes joined parsed SSE `data` through the optional
+`ProtocolMessagePresentation.dataText` field. Copy Event data reuses this parser result without
+introducing SSE parsing in the application or UI modules.

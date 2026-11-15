@@ -73,6 +73,12 @@ class DevicePolicyManagerEndToEndTest {
             assertEquals(setOf(b),duplicate.enabledOn)
             assertEquals(setOf(a),saved.protectedRules.single { it.rule.id.value=="shared" }.enabledOn)
             awaitManagers(a,null,protection,null)
+            // The library commits before manager collectors receive that revision. A deletion must
+            // acknowledge the rendered revision, rather than racing the duplicate save's emission.
+            val sharedRevision = saved.protectedRules.single { it.rule.id.value=="shared" }.revision
+            withTimeout(5_000) { protection.state.first { state ->
+                !state.isSaving && state.definitions.any { it.rule.id.value=="shared" && it.revision==sharedRevision }
+            } }
             protection.requestRuleDeletion(ProtectedTrafficRuleId("shared"))
             assertEquals(a,protection.state.value.pendingDeletion!!.context.workspace)
             protection.selectWorkspace(b)

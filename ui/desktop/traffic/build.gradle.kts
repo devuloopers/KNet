@@ -11,6 +11,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":application:desktop"))
+                implementation(libs.koin.compose.viewmodel)
                 implementation(project(":ui:core"))
                 implementation(project(":ui:desktop:httpPanel"))
                 implementation(project(":core:domain"))

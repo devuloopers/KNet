@@ -144,6 +144,8 @@ data class TrafficState(
     val readingEpoch: Long = 0,
     val isClearingHistory: Boolean = false,
     val selectedTransactionId: String? = null,
+    /** Typed export selection, initialized from the first focused row and then owned by this source's gestures. */
+    val selection: TrafficRowSelection = TrafficRowSelection(),
     val captureState: CaptureState = CaptureState.STOPPED,
     val engineState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
     val engineErrorMessage: String? = null,

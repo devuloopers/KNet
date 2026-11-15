@@ -20,6 +20,8 @@ public enum class CompanionControlOperation {
 
     /** Read the desktop's current VPN/TUN packet-condition configuration. */
     FETCH_NETWORK_CONDITIONS,
+    /** Read recording readiness for this authenticated device, without mutating capture. */
+    FETCH_CAPTURE_STATUS,
 }
 
 /** Device credential transmitted only after the pinned desktop TLS identity is authenticated. */
@@ -77,7 +79,7 @@ public class CompanionControlRequest(
         require(content.size in 0..CompanionControlProtocol.MAXIMUM_REQUEST_BYTES) {
             "Companion control request body size is invalid."
         }
-        require(operation == CompanionControlOperation.FETCH_NETWORK_CONDITIONS || content.isNotEmpty()) {
+        require(operation in setOf(CompanionControlOperation.FETCH_NETWORK_CONDITIONS, CompanionControlOperation.FETCH_CAPTURE_STATUS) || content.isNotEmpty()) {
             "This companion control operation requires a request body."
         }
         require(operation != CompanionControlOperation.PAIR || authorization == null) {
@@ -91,6 +93,9 @@ public class CompanionControlRequest(
         }
         require(operation != CompanionControlOperation.FETCH_NETWORK_CONDITIONS || authorization != null) {
             "Network condition requests require device authorization."
+        }
+        require(operation != CompanionControlOperation.FETCH_CAPTURE_STATUS || authorization != null) {
+            "Capture readiness requires device authorization."
         }
     }
 

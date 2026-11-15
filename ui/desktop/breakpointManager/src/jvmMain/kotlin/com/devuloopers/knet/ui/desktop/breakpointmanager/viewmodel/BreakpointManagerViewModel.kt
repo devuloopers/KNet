@@ -305,6 +305,12 @@ class BreakpointManagerViewModel(
             editingContext = RuleEditContext(workspace), editingWorkspaceName = name, editingUsageNames = emptyList()) }
     }
 
+    /** Opens an imported rule for review without replacing an existing unsaved editor. */
+    fun openImportedDraft(draft: com.devuloopers.knet.application.contract.importcapture.CaptureImportActionDraft.Intercept) {
+        check(!_uiState.value.isAddEditDrawerVisible && !_uiState.value.isSaving) { "Finish or close the current Intercept rule first." }
+        openPreparedDraft(draft.rule, draft.values, draft.workspace)
+    }
+
     fun openEditDrawer(rule: BreakpointRule) {
         _uiState.update {
             it.copy(

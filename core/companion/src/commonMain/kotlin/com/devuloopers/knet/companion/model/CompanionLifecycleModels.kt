@@ -76,6 +76,8 @@ public enum class CompanionFailureCode {
     CREDENTIAL_EXPIRED,
     NETWORK_UNAVAILABLE,
     TRANSPORT_UNAVAILABLE,
+    /** Desktop is reachable and authenticated but its capture/runtime has not been started. */
+    DESKTOP_CAPTURE_STOPPED,
     TRANSPORT_IDENTITY_MISMATCH,
     DESKTOP_IDENTITY_CONFLICT,
     CERTIFICATE_UNAVAILABLE,

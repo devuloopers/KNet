@@ -98,6 +98,12 @@ public interface BodyWriteSession {
  */
 public interface BodyStore : BodyAccess {
     /**
+     * Pins finalized objects against cleanup while an export copies its SQLite metadata snapshot.
+     * Specialized stores with no asynchronous deletion may use the no-op lease. Close exactly once.
+     */
+    public fun retainExportReads(): AutoCloseable = AutoCloseable { }
+
+    /**
      * Opens one exclusive temporary body writer.
      *
      * @param bodyId Opaque unique body identifier.

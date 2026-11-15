@@ -32,3 +32,7 @@ JVM, and iOS without platform APIs.
 ## Multi-device workspace and control sessions (2026-11-13)
 
 The versioned, bounded Companion session envelope and policy acknowledgement vocabulary live here. JSON serialization is a wire codec only; no sockets or presence registry enter core.
+
+## Capture workflow follow-up
+
+Recording readiness adds a bounded versioned codec and a capability-negotiated WSS capture-status envelope. Unknown or legacy status never claims recording; recording changes are independent of packet-policy leases. See `docs/capture_import.md` and `docs/companion_capture_readiness.md` for behavior and qualification boundaries.

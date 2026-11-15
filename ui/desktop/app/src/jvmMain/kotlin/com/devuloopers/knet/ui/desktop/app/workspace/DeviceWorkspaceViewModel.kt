@@ -44,6 +44,11 @@ class DeviceWorkspaceViewModel(
     private val mutableState = MutableStateFlow(DeviceWorkspaceState())
     /** Immutable presentation snapshot; credentials and socket objects never enter this state. */
     val state: StateFlow<DeviceWorkspaceState> = mutableState.asStateFlow()
+    private val emptyThroughput = NetworkThroughputHistory()
+    /** Stable navigation projection: sampling rate updates must not recompose the window or resolve every feature VM. */
+    val navigationState: StateFlow<DeviceWorkspaceState> = com.devuloopers.knet.application.contract.device.ProjectedStateFlow(state) {
+        it.copy(throughput = emptyThroughput)
+    }
     private var selectionInitialized = false
     private var monitoringJob: Job? = null
 

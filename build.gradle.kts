@@ -784,6 +784,8 @@ val verifyKotlinFirstSources by tasks.registering(VerifyKotlinFirstSourcesTask::
     allowedAwtPlatformAdapterPaths.set(
         listOf(
             "ui/core/src/jvmMain/kotlin/com/devuloopers/knet/ui/core/foundation/clipboard/ClipboardText.jvm.kt",
+            // Native desktop file transfers are decoded only in this design-system platform adapter.
+            "ui/core/src/jvmMain/kotlin/com/devuloopers/knet/ui/core/foundation/drop/NativeFileDrop.jvm.kt",
             // Toolkit is used only for native window events in this product/platform adapter.
             "products/desktop/src/jvmMain/kotlin/com/devuloopers/knet/products/desktop/window/MacDeviceTitleBar.kt",
         ),
@@ -1289,4 +1291,66 @@ tasks.register<VerifyMultiDeviceReportsTask>("devicePolicyLibrariesQualification
         "com.devuloopers.knet.products.desktop.policy.DeviceCaptureSocketEndToEndTest",
     ))
     summaryFile.set(layout.buildDirectory.file("reports/device-policy-libraries/summary.json"))
+}
+
+/** Requires complete regressions, export-specific suites and the body-store deletion/lease regressions. */
+tasks.register<VerifyMultiDeviceReportsTask>("captureExportQualification") {
+    group = "verification"
+    description = "Qualifies Traffic and API Studio portable export, response ownership, file integrity and existing protocol regressions."
+    dependsOn("devicePolicyLibrariesQualification", ":engine:session:test")
+    reportDirectories.from(devicePolicyLibraryTestTasks.map { (module, task) -> project(module).layout.buildDirectory.dir("test-results/$task") })
+    reportDirectories.from(project(":engine:session").layout.buildDirectory.dir("test-results/test"))
+    requiredSuites.set(listOf(
+        "com.devuloopers.knet.application.usecase.export.ApiStudioExportPipelineTest",
+        "com.devuloopers.knet.data.desktop.export.CaptureExportTest",
+        "com.devuloopers.knet.data.desktop.export.CaptureExportRoomTest",
+        "com.devuloopers.knet.ui.desktop.apistudio.export.CaptureExportViewModelTest",
+        "com.devuloopers.knet.ui.desktop.apistudio.export.CaptureExportRenderTest",
+    ))
+    summaryFile.set(layout.buildDirectory.file("reports/capture-export/summary.json"))
+}
+
+/** Complete capture-workflow gate: imports, selected export, per-device readiness and their UI owners. */
+tasks.register<VerifyMultiDeviceReportsTask>("captureWorkflowQualification") {
+    group = "verification"
+    description = "Qualifies draft-only file imports, exact multi-select export and Companion recording readiness without launching desktop."
+    dependsOn("captureExportQualification", ":ui:companion:presentation:jvmTest", ":ui:companion:sharedUi:jvmTest")
+    reportDirectories.from(devicePolicyLibraryTestTasks.map { (module, task) -> project(module).layout.buildDirectory.dir("test-results/$task") })
+    reportDirectories.from(project(":engine:session").layout.buildDirectory.dir("test-results/test"))
+    reportDirectories.from(project(":ui:companion:presentation").layout.buildDirectory.dir("test-results/jvmTest"))
+    reportDirectories.from(project(":ui:companion:sharedUi").layout.buildDirectory.dir("test-results/jvmTest"))
+    requiredSuites.set(listOf(
+        "com.devuloopers.knet.data.desktop.importcapture.CaptureImportTest",
+        "com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowSelectionTest",
+        "com.devuloopers.knet.application.usecase.device.CompanionCaptureStatusTest",
+        "com.devuloopers.knet.companion.model.CompanionCaptureStatusTest",
+        "com.devuloopers.knet.companion.presentation.state.CompanionCaptureNoticeTest",
+        "com.devuloopers.knet.engine.proxy.handler.RawTunnelHalfCloseDrainTest",
+        "com.devuloopers.knet.products.desktop.connectivity.CompanionConnectionEofEndToEndTest",
+        "com.devuloopers.knet.companion.application.usecase.CompanionCaptureObservationTest",
+        "com.devuloopers.knet.ui.desktop.traffic.toolbar.TrafficFileActionsRenderTest",
+        "com.devuloopers.knet.ui.core.components.menu.ContextMenuNavigationTest",
+        "com.devuloopers.knet.ui.core.components.menu.KNetContextMenuRenderTest",
+        "com.devuloopers.knet.ui.desktop.traffic.table.TrafficRowContextMenuTest",
+        "com.devuloopers.knet.ui.desktop.traffic.protection.TrafficProtectionRequestActionTest",
+        "com.devuloopers.knet.application.usecase.protectedtraffic.SetProtectedTrafficRequestActionTest",
+        "com.devuloopers.knet.products.desktop.policy.TrafficRequestProtectionEndToEndTest",
+        "com.devuloopers.knet.application.usecase.importcapture.PrepareCaptureImportActionTest",
+        "com.devuloopers.knet.ui.core.components.drop.LocalDroppedFilesTest",
+        "com.devuloopers.knet.ui.core.components.drop.KNetFileImportOverlayTest",
+        "com.devuloopers.knet.ui.desktop.traffic.importcapture.CaptureImportDialogViewModelTest",
+        "com.devuloopers.knet.ui.desktop.traffic.importcapture.CaptureImportDialogRenderTest",
+        "com.devuloopers.knet.products.desktop.policy.CaptureImportActionEndToEndTest",
+        "com.devuloopers.knet.application.usecase.copy.CopyTrafficDetailsUseCaseTest",
+        "com.devuloopers.knet.application.usecase.copy.TrafficCopyPresetUseCaseTest",
+        "com.devuloopers.knet.data.desktop.traffic.DesktopTrafficDetailsFormattingTest",
+        "com.devuloopers.knet.ui.desktop.traffic.copy.TrafficDetailsCopyViewModelTest",
+        "com.devuloopers.knet.products.desktop.traffic.TrafficDetailsCopyEndToEndTest",
+        "com.devuloopers.knet.data.desktop.copy.StudioExecutionCopyTest",
+        "com.devuloopers.knet.ui.desktop.httppanel.copy.StudioDetailsCopyViewModelTest",
+        "com.devuloopers.knet.ui.core.components.button.KNetSplitCopyButtonTest",
+        "com.devuloopers.knet.ui.desktop.apistudio.copy.StudioCopyRenderTest",
+        "com.devuloopers.knet.products.desktop.traffic.StudioDetailsCopyEndToEndTest",
+    ))
+    summaryFile.set(layout.buildDirectory.file("reports/capture-workflow/summary.json"))
 }

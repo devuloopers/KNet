@@ -11,6 +11,9 @@ import com.devuloopers.knet.traffic.model.*
 import com.devuloopers.knet.traffic.model.http.*
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.traffic.model.toTrafficRowUiState
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowSelection
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowKind
+import com.devuloopers.knet.ui.desktop.traffic.model.recordId
 import java.awt.EventQueue
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -101,6 +104,45 @@ class TrafficScrollbarViewportTest {
         }
     }
 
+    @Test fun `multi selection removes the frame while retaining highlights and restores it for one HTTP or opaque item`() = EventQueue.invokeAndWait {
+        for (width in listOf(1200, 680)) {
+            val focused = mutableStateOf<String?>("row-4")
+            val selection = mutableStateOf(TrafficRowSelection())
+            fixture(width, selected = focused, selection = selection) { scene, rows ->
+                rows.value = rows.value.map { if (it.transactionId == "row-5") it.copy(rowKind = TrafficRowKind.OPAQUE_FLOW) else it }
+                val request = rows.value.single { it.transactionId == "row-4" }.recordId
+                val opaque = rows.value.single { it.transactionId == "row-5" }.recordId
+                selection.value = TrafficRowSelection(setOf(request)); scene.frames()
+                scene.assertSelectedFrame(width)
+                selection.value = TrafficRowSelection(setOf(request, opaque)); focused.value = "row-5"; scene.frames()
+                fun assertGroupHasNoFrame() {
+                    val selectedRows = scene.nodes().filter { it.config.getOrNull(SemanticsProperties.Selected) == true }
+                    assertEquals(2, selectedRows.size)
+                    val image = scene.snapshot()
+                    val edge = scene.header().boundsInRoot.right.toInt() - 1
+                    for (row in selectedRows) {
+                        val middle = row.boundsInRoot.center.y.toInt()
+                        assertNotEquals(background, image.getRGB(2, middle), "Selected row background must remain visible")
+                        assertNotEquals(accent, image.getRGB(0, middle), "Multi-selection must not retain a left outline")
+                        assertNotEquals(accent, image.getRGB(edge, middle), "Multi-selection must not retain a right outline")
+                        assertNotEquals(accent, image.getRGB(edge / 2, row.boundsInRoot.top.toInt()))
+                        assertNotEquals(accent, image.getRGB(edge / 2, row.boundsInRoot.bottom.toInt() - 1))
+                    }
+                    assertGutter(scene, width)
+                }
+                assertGroupHasNoFrame()
+                scene.header().config[SemanticsActions.ScrollBy].action!!.invoke(10_000f, 0f); scene.frames()
+                assertGroupHasNoFrame()
+                focused.value = "row-4"; scene.frames(); assertGroupHasNoFrame()
+                selection.value = TrafficRowSelection(setOf(opaque)); focused.value = "row-5"; scene.frames()
+                scene.assertSelectedFrame(width)
+                scene.header().config[SemanticsActions.ScrollBy].action!!.invoke(-10_000f, 0f); scene.frames()
+                selection.value = TrafficRowSelection(setOf(request)); focused.value = "row-4"; scene.frames()
+                scene.assertSelectedFrame(width)
+            }
+        }
+    }
+
     private fun ImageComposeScene.assertSelectedFrame(width: Int) {
         val selected = nodes().single { it.config.getOrNull(SemanticsProperties.Selected) == true }.boundsInRoot
         val right = header().boundsInRoot.right.toInt()
@@ -117,6 +159,7 @@ class TrafficScrollbarViewportTest {
 
     private fun fixture(width: Int, fontScale: Float = 1f,
         selected: androidx.compose.runtime.MutableState<String?> = mutableStateOf("row-4"),
+        selection: androidx.compose.runtime.MutableState<TrafficRowSelection> = mutableStateOf(TrafficRowSelection()),
         check: (ImageComposeScene, androidx.compose.runtime.MutableState<List<com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowUiState>>) -> Unit) {
         val rows = mutableStateOf((1..60).map { index -> HttpExchangeSnapshot(ExchangeId("row-$index"),
             request = HttpRequestSnapshot(RequestHead(HttpMethod.POST, RequestTarget.Absolute(HttpScheme.fromToken("https"),
@@ -128,7 +171,7 @@ class TrafficScrollbarViewportTest {
             background = KNetTheme.colors.background.toArgb()
             accent = KNetTheme.colors.accent.toArgb()
             clearance = (KNetTheme.dimensions.scrollbarWidth.value + KNetTheme.spacing.sm.value).roundToInt()
-            TrafficTable(rows.value, selected.value, false, {}, "256.76 KB", rows.value.size.toLong())
+            TrafficTable(rows.value, selected.value, false, {}, "256.76 KB", rows.value.size.toLong(), selection = selection.value)
         }}).use { scene -> scene.frames(); check(scene, rows) }
     }
     private fun assertGutter(scene: ImageComposeScene, width: Int) {

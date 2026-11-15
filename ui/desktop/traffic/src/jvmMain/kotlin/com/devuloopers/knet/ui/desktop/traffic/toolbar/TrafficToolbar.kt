@@ -39,6 +39,9 @@ data class TrafficToolbarState(
     val scrollSettings: TrafficAutoScrollSettings = TrafficAutoScrollSettings(),
     val localIpAddress: String = "127.0.0.1",
     val isClearingHistory: Boolean = false,
+    val exportAvailable: Boolean = false,
+    /** Explicit selection count; zero uses the ordinary source/filter export dialog. */
+    val selectedCount: Int = 0,
     /** Source whose recording is controlled; the proxy listener itself remains shared. */
     val source: com.devuloopers.knet.application.contract.traffic.TrafficSource =
         com.devuloopers.knet.application.contract.traffic.TrafficSource.Other,
@@ -51,12 +54,14 @@ data class TrafficToolbarActions(
     val onStartCapture: () -> Unit = {},
     val onPauseCapture: () -> Unit = {},
     val onClearFeed: () -> Unit = {},
+    val onExport: (() -> Unit)? = null,
+    val onImport: (() -> Unit)? = null,
     val onAutoScrollToggle: () -> Unit = {},
     val onAutoScrollModeSelected: (TrafficAutoScrollMode) -> Unit = {},
 )
 
 /**
- * 56dp Top Feature Toolbar bound strictly to :ui:core design system tokens and parameter objects.
+ * Traffic controls use the shared toolbar's control row and separate horizontal-overflow scrollbar.
  */
 @Composable
 fun TrafficToolbar(
@@ -78,12 +83,13 @@ fun TrafficToolbar(
         "the selected device" else "Other traffic"
 
     KNetToolbar(
+        scrollLeading = true,
         modifier = modifier
             .border(width = 1.dp, color = themeColors.border)
             .padding(horizontal = spacing.md, vertical = spacing.sm),
         leading = {
             ToolbarGroup(
-                modifier = Modifier.weight(1f).padding(end = spacing.md),
+                modifier = Modifier.padding(end = spacing.md),
                 horizontalArrangement = Arrangement.spacedBy(spacing.sm),
             ) {
                 // Start Button
@@ -146,10 +152,37 @@ fun TrafficToolbar(
                     )
                 }
 
+                // Clear Button
+                Row(
+                    modifier = Modifier
+                        .clip(shapes.small)
+                        .background(themeColors.border)
+                        .clickable(enabled = !state.isClearingHistory) { actions.onClearFeed() }
+                        .padding(horizontal = spacing.sm, vertical = spacing.xs)
+                        .handCursor(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(spacing.xs)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Clear",
+                        tint = themeColors.textSecondary,
+                        modifier = Modifier.size(dimensions.iconSizeSmall)
+                    )
+                    Text(
+                        text = if (state.isClearingHistory) "Clearing…" else "Clear",
+                        style = typography.bodySmall.copy(
+                            color = themeColors.textSecondary
+                        ),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+                // Capture/Pause/Clear stay first; a long status must not displace those controls.
                 // Engine Operational Status Badge
                 Row(
                     modifier = Modifier
-                        .weight(1f, fill = false)
+                        .widthIn(max = dimensions.toolbarStatusMaxWidth)
                         .clip(shapes.small)
                         .background(themeColors.surfaceVariant)
                         .border(1.dp, themeColors.border, shapes.small)
@@ -176,7 +209,6 @@ fun TrafficToolbar(
                     )
                     Text(
                         text = statusText,
-                        modifier = Modifier.weight(1f, fill = false),
                         style = typography.labelMedium.copy(
                             color = themeColors.textSecondary,
                             fontWeight = FontWeight.Medium
@@ -187,31 +219,15 @@ fun TrafficToolbar(
                     )
                 }
 
-                // Clear Button
-                Row(
-                    modifier = Modifier
-                        .clip(shapes.small)
-                        .background(themeColors.border)
-                        .clickable(enabled = !state.isClearingHistory) { actions.onClearFeed() }
-                        .padding(horizontal = spacing.sm, vertical = spacing.xs)
-                        .handCursor(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(spacing.xs)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Clear",
-                        tint = themeColors.textSecondary,
-                        modifier = Modifier.size(dimensions.iconSizeSmall)
-                    )
-                    Text(
-                        text = if (state.isClearingHistory) "Clearing…" else "Clear",
-                        style = typography.bodySmall.copy(
-                            color = themeColors.textSecondary
-                        ),
-                        maxLines = 1,
-                        softWrap = false
-                    )
+                actions.onImport?.let { open ->
+                    com.devuloopers.knet.ui.desktop.httppanel.export.CaptureExportButton(enabled = true, onClick = open,
+                        label = "Import", description = "Open HAR, Charles XML or KNet Capture as separate historical traffic.")
+                }
+                actions.onExport?.let { export ->
+                    com.devuloopers.knet.ui.desktop.httppanel.export.CaptureExportButton(enabled = state.exportAvailable && !state.isClearingHistory, onClick = export,
+                        label = if (state.selectedCount > 0) "Export (${state.selectedCount})" else "Export",
+                        description = if (state.selectedCount > 0) "Export exactly ${state.selectedCount} selected items. Clear selection to export filtered results."
+                        else "Export retained traffic for this source or its current filters. Command/Ctrl-click adds rows; Shift-click selects a range.")
                 }
             }
         },

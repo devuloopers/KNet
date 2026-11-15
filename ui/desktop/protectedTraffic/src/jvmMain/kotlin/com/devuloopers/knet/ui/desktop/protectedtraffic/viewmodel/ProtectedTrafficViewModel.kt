@@ -108,6 +108,14 @@ class ProtectedTrafficViewModel(
         mutableState.update { it.copy(ruleDraft = ProtectedTrafficRuleDraft(context = RuleEditContext(it.workspace), workspaceName = it.workspaceName), draftError = null) }
     }
 
+    /** Opens destination values for review; recorded identities and actions never become live policy. */
+    fun openImportedDraft(draft: com.devuloopers.knet.application.contract.importcapture.CaptureImportActionDraft.ProtectedTraffic) {
+        check(!state.value.isSaving && state.value.ruleDraft == null) { "Finish or close the current Protected Traffic rule first." }
+        selectWorkspace(draft.workspace)
+        mutableState.update { it.copy(ruleDraft = ProtectedTrafficRuleDraft(destination = draft.target.normalizedHost,
+            port = draft.target.port?.toString().orEmpty(), context = RuleEditContext(draft.workspace), workspaceName = it.workspaceName), draftError = null) }
+    }
+
     /** Opens the latest saved rule by stable identity; stale or removed table rows cannot replace newer policy. */
     fun beginEditRule(rule: ProtectedTrafficRule) {
         val current = state.value

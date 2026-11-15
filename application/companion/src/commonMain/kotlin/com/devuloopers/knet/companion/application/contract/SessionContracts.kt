@@ -67,4 +67,12 @@ public data class CompanionSessionObservation(
     public val runId: String,
     /** Last confirmed lifecycle phase. Connected requires an authenticated WELCOME. */
     public val phase: CompanionSessionPhase,
+    /** Last authoritative per-device recording state; reconnects reset it to unknown. */
+    public val captureStatus: com.devuloopers.knet.companion.model.CompanionDesktopCaptureState = com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.UNKNOWN,
+)
+
+/** Authoritative recording evidence, independent of whether it arrived by WSS or pinned HTTPS. */
+public data class CompanionDesktopCaptureObservation(
+    /** Paired desktop whose authenticated device status was read. */ public val desktopId: com.devuloopers.knet.companion.model.CompanionDesktopId,
+    /** Recording admission; Unknown never claims connectivity or recording. */ public val status: com.devuloopers.knet.companion.model.CompanionDesktopCaptureState,
 )

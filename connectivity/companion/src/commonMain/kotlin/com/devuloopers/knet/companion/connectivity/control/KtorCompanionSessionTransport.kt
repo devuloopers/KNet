@@ -32,6 +32,7 @@ internal class KtorCompanionSessionTransport(private val provider: CompanionKtor
                     encodedPathSegments = CompanionSessionProtocol.PATH.removePrefix("/").split('/')
                 }
                 header("Authorization", "Bearer ${authorization.deviceId.value}:${authorization.credential()}")
+                header(CompanionSessionProtocol.CAPTURE_STATUS_HEADER, "1")
             }
             return Connection(session, handle)
         } catch (_: CancellationException) {

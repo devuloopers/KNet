@@ -6,6 +6,8 @@ Adapts desktop engines and storage to existing domain and application-facing rep
 
 ## Owns
 
+- The Traffic details formatting adapter reuses bounded JSON/GraphQL inspector formatting without
+  learning persisted queries or owning clipboard APIs.
 - Desktop repository implementations, persistence mappers, and reusable runtime adapters.
 - The application `ProxyRuntime` and `CaptureSessionControl` adapters, including listener-preserving
   capture pause/resume and active canonical session rotation for clear.
@@ -130,3 +132,16 @@ Traffic Clear completes after durable metadata removal/outbox admission; file co
 process-scoped reactive BodyDeletionWorker. It drains bounded batches, acknowledges successful files together,
 persists failed-file retry deadlines, and shares serialization with startup recovery. See
 [Traffic Clear performance](../../docs/traffic_clear_performance.md).
+
+## Capture workflow follow-up
+
+Capture import adapters stream HAR 1.2, Charles XML and KNet Capture into an isolated private indexed spool. No live Room, pairing or policy state is changed by importing; bounded file/record/payload validation, integrity and cleanup remain data responsibilities. See `docs/capture_import.md` and `docs/companion_capture_readiness.md` for behavior and qualification boundaries.
+
+## Studio copy snapshots
+
+The existing `DesktopStudioExportRecorder` also implements `StudioCopySource`; no second recorder or
+Traffic lookup is created. A private mapper reads only the preset's bounded file prefixes under the
+session guard. Actual response evidence, immutable submitted/transport metadata, native status/trailers
+and bounded engine-decoded gRPC JSON survive independently of the mutable editor draft. Release retires
+the source and schedules file cleanup, while already-owned copy snapshots retain their prefixes.
+See `docs/api_studio_copy.md`.

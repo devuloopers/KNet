@@ -1386,7 +1386,7 @@ internal class KNetStreamingProxyHandler(
         upstream: Channel,
         capture: ProxyOpaqueFlowCapture?,
     ) {
-        val lifecycle = RawTunnelLifecycle(capture)
+        val lifecycle = RawTunnelLifecycle(capture, runtimePolicy.rawTunnelHalfCloseIdleTimeoutMillis)
         ProxyTransportActivity.link(context.channel(), upstream)
         val downstreamPipeline = context.pipeline()
         removeDownstreamHttpHandlers(downstreamPipeline)

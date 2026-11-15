@@ -28,6 +28,24 @@ Use these documents when deciding what the repository currently owns or supports
 When prose and the runtime catalog disagree, use the more conservative status and correct the prose. A capability
 is not release-supported merely because source code or a simulator build exists.
 
+Traffic and API Studio export behavior, archive v1 and format limits are documented in
+[`traffic_export.md`](traffic_export.md); the executed matrix and remaining native acceptance boundaries
+are tracked in [`traffic_export_qualification.md`](traffic_export_qualification.md).
+
+Local capture-file imports and their format/security bounds are documented in
+[`capture_import.md`](capture_import.md). Authenticated per-device recording readiness and the Companion
+start-capture dialog are documented in [`companion_capture_readiness.md`](companion_capture_readiness.md).
+The two-device soak, resulting cleanup repair and combined verification are recorded in
+[`two_device_capture_workflow_qualification.md`](two_device_capture_workflow_qualification.md).
+
+The continuous Import overlay, pre-release drag feedback and four explicit editor handoffs are documented in
+[`capture_drop_actions.md`](capture_drop_actions.md).
+
+Traffic row actions, grouped connection handling and keyboard behavior are documented in
+[`traffic_context_menu.md`](traffic_context_menu.md). Structured single/group clipboard copying is documented in
+[`traffic_copy_details.md`](traffic_copy_details.md). API Studio’s execution-owned split copy control,
+shared themed menu and native/SSE copies are documented in [`api_studio_copy.md`](api_studio_copy.md).
+
 Traffic reading controls and arrival-count behavior are documented in
 [`traffic_auto_scroll.md`](traffic_auto_scroll.md).
 
@@ -56,6 +74,8 @@ inside them are not current capability claims:
 - [`deep_architecture_scalability_engineering_audit.md`](deep_architecture_scalability_engineering_audit.md)
 - [`target_architecture_and_implementation_plan.md`](target_architecture_and_implementation_plan.md)
 - [`implementation_plan.md`](implementation_plan.md)
+- [`traffic_api_studio_export_plan.md`](traffic_api_studio_export_plan.md) — completed export-only workflow
+  for Traffic and API Studio, response gating, portable archives/HAR and qualification matrix.
 - [`device_policy_libraries_implementation_plan.md`](device_policy_libraries_implementation_plan.md) — implemented
   shared/private rule definitions, independent per-device activation, migration and qualification matrix.
 - [`multi_device_qualification.md`](multi_device_qualification.md) — multi-device automated evidence, resource bounds and hardware verification checklist.

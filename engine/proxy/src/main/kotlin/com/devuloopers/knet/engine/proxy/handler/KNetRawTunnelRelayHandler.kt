@@ -19,43 +19,59 @@ import io.netty.util.ReferenceCountUtil
 import io.netty.handler.timeout.ReadTimeoutException
 import io.netty.handler.timeout.WriteTimeoutException
 import java.util.concurrent.CopyOnWriteArraySet
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import kotlin.time.Clock
 
-/** Exactly-once lifecycle shared by both directions of one opaque raw tunnel. */
+/**
+ * Exactly-once owner of an opaque tunnel's two event loops and finite half-close drain.
+ *
+ * Quiet fully open tunnels have no idle timer. After one input EOF, the remaining direction gets a
+ * fresh idle grace after each successful write. Accepted shaped/backpressured writes suspend that
+ * grace. This releases abandoned CLOSE_WAIT/admission slots without truncating active responses.
+ */
 internal class RawTunnelLifecycle(
     private val capture: ProxyOpaqueFlowCapture?,
+    private val halfCloseIdleTimeoutMillis: Long = 60_000L,
 ) {
     private val channels = CopyOnWriteArraySet<Channel>()
-    private val terminated = AtomicBoolean(false)
+    private val closureMonitor = Any()
+    private var terminated = false
+    private var closure: OpaqueFlowClosure? = null
+    private var inputShutdowns = 0
+    private var pendingWrites = 0
+    private var completionRequested = false
+    private var drainTask: ScheduledFuture<*>? = null
+    private var drainGeneration = 0L
 
-    /** Registers transport ownership so terminal half-closes release both admitted sockets. */
-    fun attach(channel: Channel, peer: Channel) {
+    init { require(halfCloseIdleTimeoutMillis > 0L) }
+
+    /** Registers both transport owners before either can publish EOF or terminal failure. */
+    fun attach(channel: Channel, peer: Channel) = synchronized(closureMonitor) {
         channels.add(channel)
         channels.add(peer)
-        if (terminated.get()) { channel.close(); peer.close() }
+        if (terminated) { channel.close(); peer.close() }
     }
-    private val closureMonitor = Any()
-    private var closure: OpaqueFlowClosure? = null
-    private val inputShutdowns = AtomicInteger(0)
-    private val pendingWrites = AtomicInteger(0)
-    private val completionRequested = AtomicBoolean(false)
 
-    /** Records incoming EOF before forwarding a half-close; queued writes still own final delivery. */
-    fun observeInputShutdown(direction: TrafficDirection, occurredAtEpochMillis: Long = Clock.System.now().toEpochMilliseconds()) {
+    /** Duplicate EOF notifications cannot count as closure of the opposite direction. */
+    fun observeInputShutdown(direction: TrafficDirection, occurredAtEpochMillis: Long = Clock.System.now().toEpochMilliseconds()) = synchronized(closureMonitor) {
+        if (terminated) return@synchronized
+        val bit = if (direction == TrafficDirection.CLIENT_TO_SERVER) 1 else 2
+        if (inputShutdowns and bit != 0) return@synchronized
         observeClosure(if (direction == TrafficDirection.CLIENT_TO_SERVER) OpaqueFlowCloseInitiator.DEVICE
             else OpaqueFlowCloseInitiator.SERVER, OpaqueFlowCloseReason.PEER_EOF, occurredAtEpochMillis)
-        if (inputShutdowns.incrementAndGet() >= 2) requestCompletion()
+        inputShutdowns = inputShutdowns or bit
+        if (inputShutdowns == 3) completionRequested = true
+        completeOrAwaitDrain()
     }
 
     /**
-     * First evidence wins before any propagated/local peer close. Opposite EOFs in one wall-clock tick are
-     * conservatively ambiguous. Publish immediately: connection close listeners can end capture before inactive.
+     * Records first closure evidence before a propagated/local close. Opposite EOFs within one clock
+     * tick remain ambiguous; timeout cleanup retains the peer's original EOF as its initiator.
      */
     fun observeClosure(initiator: OpaqueFlowCloseInitiator, reason: OpaqueFlowCloseReason,
         occurredAtEpochMillis: Long = Clock.System.now().toEpochMilliseconds()) = synchronized(closureMonitor) {
-        if (terminated.get()) return@synchronized
+        if (terminated) return@synchronized
         val incoming = OpaqueFlowClosure(initiator, reason, occurredAtEpochMillis)
         val first = closure
         val next = when {
@@ -68,38 +84,64 @@ internal class RawTunnelLifecycle(
         if (next != first) { closure = next; capture?.observeClosure(next) }
     }
 
-    /** Reserves one shared terminal obligation before handing payload to the peer's outbound pipeline. */
-    fun writeStarted() { pendingWrites.incrementAndGet() }
+    /** Reserves delivery before handing payload to another event loop; rejects late terminal data. */
+    fun writeStarted(): Boolean = synchronized(closureMonitor) {
+        if (terminated) return@synchronized false
+        pendingWrites++
+        cancelDrainTask()
+        true
+    }
 
-    /** A failed final write must win over success; only successful drained delivery can complete the flow. */
-    fun writeFinished(success: Boolean) {
+    /** Failed final delivery wins over EOF. Successful progress restarts the half-close idle grace. */
+    fun writeFinished(success: Boolean) = synchronized(closureMonitor) {
+        check(pendingWrites > 0)
+        pendingWrites--
+        if (terminated) return@synchronized
         if (!success) {
             observeClosure(OpaqueFlowCloseInitiator.UNKNOWN, OpaqueFlowCloseReason.IO_ERROR)
             terminate(ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.DUPLEX_WRITE_FAILED))
+        } else completeOrAwaitDrain()
+    }
+
+    /** Requests orderly termination after every already-admitted write has settled. */
+    fun requestCompletion() = synchronized(closureMonitor) {
+        completionRequested = true
+        completeOrAwaitDrain()
+    }
+
+    private fun completeOrAwaitDrain() {
+        if (terminated || pendingWrites != 0) return
+        if (completionRequested) terminate(ExchangeTerminalOutcome.Completed)
+        else if (inputShutdowns != 0 && drainTask == null) {
+            val channel = channels.firstOrNull() ?: return
+            val generation = ++drainGeneration
+            drainTask = channel.eventLoop().schedule({
+                synchronized(closureMonitor) {
+                    // Write admission and this callback share the monitor: progress racing expiry
+                    // either cancels the old generation or is rejected after terminal ownership.
+                    if (!terminated && generation == drainGeneration && pendingWrites == 0 && inputShutdowns != 0) {
+                        terminate(ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Transport.TUNNEL_HALF_CLOSE_IDLE_TIMEOUT))
+                    }
+                }
+            }, halfCloseIdleTimeoutMillis, TimeUnit.MILLISECONDS)
         }
-        pendingWrites.decrementAndGet()
-        completeIfDrained()
     }
 
-    /** Requests orderly termination after every already-admitted write has completed. */
-    fun requestCompletion() {
-        completionRequested.set(true)
-        completeIfDrained()
+    private fun cancelDrainTask() {
+        drainGeneration++
+        drainTask?.cancel(false)
+        drainTask = null
     }
 
-    private fun completeIfDrained() {
-        if (completionRequested.get() && pendingWrites.get() == 0) terminate(ExchangeTerminalOutcome.Completed)
-    }
-
-    /** Publishes the first terminal outcome and ignores peer-close races. */
-    fun terminate(outcome: ExchangeTerminalOutcome) {
-        synchronized(closureMonitor) {
-            if (!terminated.compareAndSet(false, true)) return
-            try {
-                capture?.terminate(outcome, Clock.System.now().toEpochMilliseconds())
-            } finally {
-                channels.forEach { channel -> channel.close() }
-            }
+    /** Publishes terminal evidence before closing both sockets and releases the scheduled drain task. */
+    fun terminate(outcome: ExchangeTerminalOutcome) = synchronized(closureMonitor) {
+        if (terminated) return@synchronized
+        terminated = true
+        cancelDrainTask()
+        try {
+            capture?.terminate(outcome, Clock.System.now().toEpochMilliseconds())
+        } finally {
+            channels.forEach { channel -> channel.close() }
         }
     }
 }
@@ -145,8 +187,11 @@ internal class KNetRawTunnelRelayHandler(
         if (byteCount > 0) {
             capture?.observeBytes(direction, byteCount, Clock.System.now().toEpochMilliseconds())
         }
+        if (!lifecycle.writeStarted()) {
+            payload.release()
+            return
+        }
         pendingPeerWrites += 1
-        lifecycle.writeStarted()
         peer.writeAndFlush(payload).addListener { writeFuture ->
             // Both peer event loops can finish concurrently; shared terminal accounting is atomic.
             lifecycle.writeFinished(writeFuture.isSuccess)

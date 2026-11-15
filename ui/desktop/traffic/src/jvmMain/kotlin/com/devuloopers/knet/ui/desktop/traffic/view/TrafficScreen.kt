@@ -28,13 +28,15 @@ import com.devuloopers.knet.ui.desktop.traffic.toolbar.TrafficToolbarState
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import com.devuloopers.knet.application.usecase.protectedtraffic.ProtectedTrafficQuickRuleScope
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.runtime.rememberCoroutineScope
+import com.devuloopers.knet.ui.core.foundation.clipboard.setPlainText
 
 /**
  * Top-level Live Traffic Workspace Screen composable bound strictly to :ui:core design tokens and parameter objects.
  * @param throughputIndicator Shell-composed actual throughput display; Traffic owns placement, not measurements.
  * @param onClearFeed Optional shell routing for device presence and offline-close confirmation.
+ * @param onImportCapture Opens the app-wide intake dialog without replacing this workspace.
  */
 @Composable
 fun TrafficScreen(
@@ -46,8 +48,14 @@ fun TrafficScreen(
     networkConditionsControl: @Composable () -> Unit = {},
     throughputIndicator: (@Composable () -> Unit)? = null,
     onClearFeed: (() -> Unit)? = null,
+    onImportCapture: () -> Unit = {},
 ) {
+    val exportViewModel: com.devuloopers.knet.ui.desktop.httppanel.export.CaptureExportViewModel = org.koin.compose.viewmodel.koinViewModel(key = "traffic-export")
+    com.devuloopers.knet.ui.desktop.httppanel.export.CaptureExportDialog(exportViewModel)
+    val copyViewModel: com.devuloopers.knet.ui.desktop.traffic.copy.TrafficDetailsCopyViewModel = org.koin.compose.viewmodel.koinViewModel()
+    val copyState by copyViewModel.state.collectAsState()
     val state by viewModel.uiState.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(state.source) { copyViewModel.selectSource(state.source) }
     val protectionState by protectionViewModel.uiState.collectAsState()
     val selectedOpaque = state.selectedTransaction?.capturedOpaqueFlow
     val presentedProtection = protectionViewModel.stateForSelection(selectedOpaque, state.source, protectionState)
@@ -62,7 +70,7 @@ fun TrafficScreen(
     }
     val themeColors = KNetTheme.colors
     var inspectorSplitRatio by remember { mutableFloatStateOf(0.65f) }
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
 
     val toolbarState =
         remember(
@@ -72,6 +80,8 @@ fun TrafficScreen(
             state.scrollSettings,
             state.localIpAddress,
             state.isClearingHistory,
+            state.facetCounts.totalCount,
+            state.selection,
         ) {
             TrafficToolbarState(
                 captureState = state.captureState,
@@ -79,12 +89,20 @@ fun TrafficScreen(
                 scrollSettings = state.scrollSettings,
                 localIpAddress = state.localIpAddress,
                 isClearingHistory = state.isClearingHistory,
+                exportAvailable = state.facetCounts.totalCount > 0 || state.selection.records.isNotEmpty(),
+                selectedCount = state.selection.records.size,
                 source = state.source,
             )
         }
 
-    val toolbarActions = remember(viewModel, onClearFeed) {
+    val toolbarActions = remember(viewModel, onClearFeed, onImportCapture) {
         TrafficToolbarActions(
+            onImport = onImportCapture,
+            onExport = {
+                val selection = viewModel.exportSelection()
+                if (selection != null) exportViewModel.open(selection, "${selection.records.size} selected traffic items")
+                else exportViewModel.open(viewModel.exportSource(), "Traffic from selected source")
+            },
             onStartCapture = { viewModel.processIntent(TrafficIntent.StartCapture) },
             onPauseCapture = { viewModel.processIntent(TrafficIntent.PauseCapture) },
             onClearFeed = onClearFeed ?: { viewModel.processIntent(TrafficIntent.ClearFeed) },
@@ -138,6 +156,28 @@ fun TrafficScreen(
         }
     }
 
+    // Context commands capture only their original source, not the full row window/body state.
+    val protectedActionSource = state.source
+    val handleProtectedAction = remember(viewModel, protectionViewModel, protectedActionSource) {
+        { id: com.devuloopers.knet.application.contract.traffic.TrafficRecordId, action: ProtectedTrafficAction ->
+            val transactionId = when (id) {
+                is com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Exchange -> id.id.value
+                is com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Opaque -> id.id.value
+            }
+            viewModel.processIntent(TrafficIntent.SelectTransaction(transactionId))
+            protectionViewModel.selectFlow((id as? com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Opaque)?.id)
+            protectionViewModel.applyRecordAction(id, action) { message ->
+                viewModel.processIntent(TrafficIntent.ReportActionError(protectedActionSource, message))
+            }
+        }
+    }
+    val copySource = state.source
+    val handleCopyDetails: (List<com.devuloopers.knet.application.contract.traffic.TrafficRecordId>, com.devuloopers.knet.application.contract.traffic.TrafficCopyPreset) -> Unit = remember(copyViewModel, clipboard, copySource) {
+        { records, preset -> copyViewModel.copy(com.devuloopers.knet.application.contract.export.CaptureExportSource.Selection(records, copySource), preset) { text ->
+            clipboard.setPlainText(text)
+        } }
+    }
+
     val columnResizeActions = remember(viewModel) {
         TrafficTableColumnResizeActions(
             onResize = { column, widthDp ->
@@ -157,7 +197,7 @@ fun TrafficScreen(
         color = themeColors.background
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // 1. Top Toolbar (56dp)
+            // Capture controls retain their height; any overflow scrollbar occupies its own row.
             TrafficToolbar(
                 state = toolbarState,
                 actions = toolbarActions,
@@ -166,8 +206,8 @@ fun TrafficScreen(
 
             // 1.1 Error Banner (Visible when engine error occurs)
             TrafficErrorBanner(
-                errorMessage = state.engineErrorMessage ?: state.trafficErrorMessage,
-                onDismiss = { viewModel.processIntent(TrafficIntent.DismissEngineError) }
+                errorMessage = copyState.error ?: state.engineErrorMessage ?: state.trafficErrorMessage,
+                onDismiss = { copyViewModel.clearError(); viewModel.processIntent(TrafficIntent.DismissEngineError) }
             )
 
             // 2. Quick Filters Row (40dp)
@@ -183,6 +223,14 @@ fun TrafficScreen(
                 onSplitRatioChange = { inspectorSplitRatio = it },
                 firstPane = { paneModifier ->
                     TrafficTable(
+                        selection = state.selection,
+                        selectionActions = com.devuloopers.knet.ui.desktop.traffic.model.TrafficSelectionActions(
+                            select = { id, gesture -> viewModel.processIntent(TrafficIntent.SelectTraffic(id, gesture)) },
+                            selectLoaded = { viewModel.processIntent(TrafficIntent.SelectLoadedTraffic) },
+                            clear = { viewModel.processIntent(TrafficIntent.ClearTrafficSelection) },
+                            export = { viewModel.exportSelection()?.let { selection -> exportViewModel.open(selection, "${selection.records.size} selected traffic items") } },
+                        ),
+                onExportItem = { id -> exportViewModel.open(com.devuloopers.knet.application.contract.export.CaptureExportSource.Item(id), "Selected traffic item") },
                         transactions = state.filteredTransactions,
                         selectedId = state.selectedTransactionId,
                         autoScroll = state.autoScroll,
@@ -195,14 +243,8 @@ fun TrafficScreen(
                         onSendToApiStudio = handleExportToStudio,
                         onAddBreakpointRule = viewModel::createBreakpointFromTransaction,
                         onAddNetworkCondition = onAddNetworkCondition,
-                        onProtectedTrafficAction = { id, action, scope ->
-                            viewModel.processIntent(TrafficIntent.SelectTransaction(id))
-                            protectionViewModel.selectFlow(com.devuloopers.knet.traffic.id.OpaqueFlowId(id))
-                            protectionViewModel.applyFlowAction(id, action, scope)
-                        },
-                        onCopyDestination = { destination ->
-                            clipboardManager.setText(AnnotatedString(destination))
-                        },
+                        onProtectedTrafficAction = handleProtectedAction,
+                        onCopyDetails = handleCopyDetails,
                         activeRules = state.activeBreakpointRules,
                         canLoadMore = (state.nextPageCursor != null || state.olderPageAnchor != null) && !state.isPageLoading,
                         onLoadMore = { viewModel.processIntent(TrafficIntent.LoadNextPage) },

@@ -8,6 +8,8 @@ import com.devuloopers.knet.companion.application.usecase.ConnectCompanionUseCas
 import com.devuloopers.knet.companion.application.usecase.DisconnectCompanionUseCase
 import com.devuloopers.knet.companion.application.usecase.DownloadCompanionRootCertificateUseCase
 import com.devuloopers.knet.companion.application.usecase.ForgetCompanionDesktopUseCase
+import com.devuloopers.knet.companion.application.usecase.FetchCompanionCaptureStatusUseCase
+import com.devuloopers.knet.companion.application.usecase.ObserveCompanionDesktopCaptureUseCase
 import com.devuloopers.knet.companion.application.usecase.FetchCompanionPacketConditionsUseCase
 import com.devuloopers.knet.companion.application.usecase.MaintainCompanionEndpointUseCase
 import com.devuloopers.knet.companion.application.usecase.MonitorCompanionDesktopAvailabilityUseCase
@@ -54,9 +56,11 @@ internal fun companionApplicationModule(): Module = module {
     single { CompleteCompanionCertificateEnrollmentUseCase(get(), get(), get(), ::currentEpochMillis) }
     single { ObserveCompanionCertificateStoreChangesUseCase(get()) }
     single { FetchCompanionPacketConditionsUseCase(get(), get()) }
+    single { FetchCompanionCaptureStatusUseCase(get(), get()) }
+    single { ObserveCompanionDesktopCaptureUseCase(get<com.devuloopers.knet.companion.application.usecase.MaintainCompanionSessionUseCase>().state, get(), get(), get()) }
     single { com.devuloopers.knet.companion.application.usecase.MaintainCompanionPacketPolicyUseCase(get<FetchCompanionPacketConditionsUseCase>(), get()) }
     single { com.devuloopers.knet.companion.application.usecase.MaintainCompanionSessionUseCase(get(), get(), get(), get()) }
-    single { StartCompanionInspectionUseCase(get(), get(), get(), get(), get(), get()) }
+    single { StartCompanionInspectionUseCase(get(), get(), get(), get(), get(), get(), get()) }
     single { StopCompanionInspectionUseCase(get(), get()) }
     single { ObserveCompanionInspectionUseCase(get()) }
     single { RefreshCompanionCredentialUseCase(get(), get(), get(), ::currentEpochMillis) }

@@ -1,6 +1,8 @@
 package com.devuloopers.knet.ui.desktop.apistudio.response
 
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import com.devuloopers.knet.ui.desktop.httppanel.components.ResponseSummaryHeader
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.traffic.model.ExchangeTimings
@@ -15,49 +17,11 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.ResponseViewPanel
 
-/**
- * Closed set of copy format capabilities supported by Response Inspector views.
- *
- * @property label User-facing format label.
- */
-enum class CopyFormatType(val label: String) {
-    RAW("RAW"),
-    JSON("JSON"),
-    TEXT("TEXT")
-}
-
-/**
- * Closed set of response inspector sub-tabs with strongly-typed copy format capabilities.
- *
- * @property baseLabel Display label for the sub-tab.
- * @property supportedCopyFormats List of supported [CopyFormatType] options.
- */
+/** Response navigation; clipboard commands are separately owned by the shared typed copy catalogue. */
 enum class ResponseSubTab(
-    val baseLabel: String,
-    val supportedCopyFormats: List<CopyFormatType>
+    /** User-facing title before optional record counts. */ val baseLabel: String,
 ) {
-    BODY(
-        baseLabel = "Body",
-        supportedCopyFormats = listOf(CopyFormatType.JSON)
-    ),
-    HEADERS(
-        baseLabel = "Headers",
-        supportedCopyFormats = listOf(CopyFormatType.RAW, CopyFormatType.JSON)
-    ),
-    COOKIES(
-        baseLabel = "Cookies",
-        supportedCopyFormats = listOf(CopyFormatType.RAW, CopyFormatType.JSON)
-    ),
-    TEST_RESULTS(
-        baseLabel = "Test Results",
-        supportedCopyFormats = listOf(CopyFormatType.TEXT)
-    ),
-    CONSOLE(
-        baseLabel = "Console",
-        supportedCopyFormats = listOf(CopyFormatType.TEXT)
-    );
-
-    val isMultiFormatCopy: Boolean get() = supportedCopyFormats.size > 1
+    BODY("Body"), HEADERS("Headers"), COOKIES("Cookies"), TEST_RESULTS("Test Results"), CONSOLE("Console");
 }
 
 /**
@@ -81,10 +45,16 @@ fun ResponseInspectorView(
     actions: ResponseInspectorActions = ResponseInspectorActions(),
     activeSubTab: ResponseSubTab = ResponseSubTab.BODY,
     onSubTabSelected: (ResponseSubTab) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    exportAction: (@Composable () -> Unit)? = null,
+    execution: com.devuloopers.knet.application.contract.export.StudioExportSession? = null,
+    executionCopyEnabled: Boolean = false,
 ) {
     if (state.liveResponse != null) {
-        LiveHttpResponseView(state = state, actions = actions, modifier = modifier)
+        LiveHttpResponseView(state = state, actions = actions, modifier = modifier, exportAction = exportAction, copyAction = if (executionCopyEnabled) ({
+            com.devuloopers.knet.ui.desktop.httppanel.copy.StudioExecutionCopyAction(execution, "http",
+                primary = com.devuloopers.knet.application.contract.traffic.TrafficCopyPreset.SSE_EVENTS, label = "Copy events", eventStream = true)
+        }) else null)
         return
     }
     val headerPairs = remember(state.headers) { state.headers.map { it.key to it.value } }
@@ -118,6 +88,18 @@ fun ResponseInspectorView(
         else -> InspectorSubTab.BODY
     }
 
+    Column(modifier = modifier) {
+    if (exportAction != null) ResponseSummaryHeader(
+        head = responseHead, timings = ExchangeTimings(totalMillis = state.durationMs),
+        formattedSize = "${state.sizeBytes} B", responseBody = state.responseBody,
+        cookies = cookiePairs, onClearResponse = actions.onClearResponse, exportAction = exportAction,
+        copyAction = if (executionCopyEnabled) ({ com.devuloopers.knet.ui.desktop.httppanel.copy.StudioExecutionCopyAction(execution, "http",
+            primary = when (activeSubTab) {
+                ResponseSubTab.HEADERS -> com.devuloopers.knet.application.contract.traffic.TrafficCopyPreset.RESPONSE_HEADERS
+                ResponseSubTab.COOKIES -> com.devuloopers.knet.application.contract.traffic.TrafficCopyPreset.RESPONSE_COOKIES
+                else -> com.devuloopers.knet.application.contract.traffic.TrafficCopyPreset.RESPONSE_BODY
+            }, label = when (activeSubTab) { ResponseSubTab.HEADERS -> "Copy headers"; ResponseSubTab.COOKIES -> "Copy cookies"; else -> "Copy body" }) }) else null,
+    )
     ResponseViewPanel(
         head = responseHead,
         timings = ExchangeTimings(totalMillis = state.durationMs),
@@ -138,6 +120,9 @@ fun ResponseInspectorView(
             onSubTabSelected(responseTab)
         },
         onClearResponse = actions.onClearResponse,
-        modifier = modifier
+        modifier = Modifier.weight(1f),
+        showSummaryHeader = exportAction == null,
+        showInlineActions = exportAction == null,
     )
+    }
 }

@@ -46,6 +46,18 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowSelection
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficSelectionActions
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficSelectionGesture
+import com.devuloopers.knet.ui.desktop.traffic.model.recordId
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.devuloopers.knet.ui.core.components.scrollbar.rememberVerticalScrollbarGutter
@@ -76,9 +88,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.resolveTrafficColumnLayout
 import com.devuloopers.knet.ui.desktop.traffic.model.toTrafficHostLabel
 import com.devuloopers.knet.ui.desktop.traffic.model.displayStatusLabel
 
-import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
-import com.devuloopers.knet.application.usecase.protectedtraffic.ProtectedTrafficQuickRuleScope
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
 
 private object TrafficTableMetrics {
@@ -125,8 +135,8 @@ data class TrafficTableScrollActions(
  * @param columnResizeActions Caller-owned resize, commit, and per-column reset callbacks.
  * @param onSendToApiStudio Requests export of one canonical exchange to API Studio.
  * @param onAddBreakpointRule Requests creation of a rule draft from one canonical exchange.
- * @param onProtectedTrafficAction Persists a future-flow application or destination policy from an opaque row.
- * @param onCopyDestination Copies one row's visible destination without exposing payload data.
+ * @param onProtectedTrafficAction Persists future-destination handling from one typed canonical record.
+ * @param onCopyDetails Copies a frozen exact single/group selection through the application boundary.
  * @param activeRules Current authored breakpoint rules used for row decoration.
  * @param canLoadMore Whether another keyset page is available.
  * @param onLoadMore Requests the next keyset page.
@@ -147,8 +157,8 @@ fun TrafficTable(
     onSendToApiStudio: (String) -> Unit = {},
     onAddBreakpointRule: (String) -> Unit = {},
     onAddNetworkCondition: (String) -> Unit = {},
-    onProtectedTrafficAction: (String, ProtectedTrafficAction, ProtectedTrafficQuickRuleScope) -> Unit = { _, _, _ -> },
-    onCopyDestination: (String) -> Unit = {},
+    onProtectedTrafficAction: (com.devuloopers.knet.application.contract.traffic.TrafficRecordId, ProtectedTrafficAction) -> Unit = { _, _ -> },
+    onCopyDetails: (List<com.devuloopers.knet.application.contract.traffic.TrafficRecordId>, com.devuloopers.knet.application.contract.traffic.TrafficCopyPreset) -> Unit = { _, _ -> },
     activeRules: List<com.devuloopers.knet.domain.rules.model.BreakpointRule> = emptyList(),
     canLoadMore: Boolean = false,
     onLoadMore: () -> Unit = {},
@@ -160,14 +170,29 @@ fun TrafficTable(
     canLoadNewer: Boolean = false,
     readingEpoch: Long = 0,
     scrollActions: TrafficTableScrollActions = TrafficTableScrollActions(),
+    onExportItem: (com.devuloopers.knet.application.contract.traffic.TrafficRecordId) -> Unit = {},
+    selection: TrafficRowSelection = TrafficRowSelection(),
+    selectionActions: TrafficSelectionActions? = null,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
+    val selectedCopyRecords = remember(selection.records) { selection.records.toList() }
+    val groupCopyCapabilities = remember(selectedCopyRecords, transactions) {
+        if (selectedCopyRecords.size > 1) TrafficCopyMenuCapabilities.from(selection.records, transactions) else null
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(themeColors.background)
+            .onPreviewKeyEvent { event ->
+                if (selectionActions == null || event.type != KeyEventType.KeyDown) false
+                else when {
+                    event.key == Key.A && (event.isMetaPressed || event.isCtrlPressed) -> { selectionActions.selectLoaded(); true }
+                    event.key == Key.Escape && selection.records.isNotEmpty() -> { selectionActions.clear(); true }
+                    else -> false
+                }
+            }
     ) {
         val listState = remember(viewportKey) { androidx.compose.foundation.lazy.LazyListState(initialViewport.row, initialViewport.offset) }
         val horizontalScrollState = remember(viewportKey) { androidx.compose.foundation.ScrollState(initialViewport.horizontal) }
@@ -329,7 +354,7 @@ fun TrafficTable(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(end = verticalGutter)
-                                    .trafficSelectionOutline(listState, selectedId)
+                                    .trafficSelectionOutline(listState, selectedId.takeUnless { selection.records.size > 1 })
                                     .horizontalScroll(horizontalScrollState),
                             ) {
                                 LazyColumn(
@@ -343,93 +368,33 @@ fun TrafficTable(
                                         items = transactions,
                                         key = { it.transactionId }
                                     ) { item ->
-                                        val contextMenuItems = remember(item) {
-                                            buildList {
-                                                if (item.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
-                                                    add(
-                                                        ContextMenuItem(
-                                                            label = "Send to API Studio",
-                                                            icon = KNetIcons.Send,
-                                                        ) {
-                                                            onSendToApiStudio(item.transactionId)
-                                                        },
-                                                    )
-                                                }
-                                                if (item.rowKind == TrafficRowKind.OPAQUE_FLOW) {
-                                                    if (item.sourceApplicationId != null) {
-                                                        add(
-                                                            ContextMenuItem(label = "Always tunnel this application") {
-                                                                onProtectedTrafficAction(
-                                                                    item.transactionId,
-                                                                    ProtectedTrafficAction.TUNNEL,
-                                                                    ProtectedTrafficQuickRuleScope.SOURCE_APPLICATION,
-                                                                )
-                                                            },
-                                                        )
-                                                    }
-                                                    add(
-                                                        ContextMenuItem(label = "Always tunnel this destination") {
-                                                            onProtectedTrafficAction(
-                                                                item.transactionId,
-                                                                ProtectedTrafficAction.TUNNEL,
-                                                                ProtectedTrafficQuickRuleScope.DESTINATION,
-                                                            )
-                                                        },
-                                                    )
-                                                    add(
-                                                        ContextMenuItem(label = "Attempt inspection next time") {
-                                                            onProtectedTrafficAction(
-                                                                item.transactionId,
-                                                                ProtectedTrafficAction.INSPECT,
-                                                                ProtectedTrafficQuickRuleScope.DESTINATION,
-                                                            )
-                                                        },
-                                                    )
-                                                    add(
-                                                        ContextMenuItem(label = "Block this destination") {
-                                                            onProtectedTrafficAction(
-                                                                item.transactionId,
-                                                                ProtectedTrafficAction.BLOCK,
-                                                                ProtectedTrafficQuickRuleScope.DESTINATION,
-                                                            )
-                                                        },
-                                                    )
-                                                    add(
-                                                        ContextMenuItem(label = "Copy destination") {
-                                                            onCopyDestination(item.host)
-                                                        },
-                                                    )
-                                                }
-                                                add(
-                                                    ContextMenuItem(
-                                                        label = "Add to Network Conditions...",
-                                                        icon = KNetIcons.Speed
-                                                    ) {
-                                                        onAddNetworkCondition(item.transactionId)
-                                                    },
-                                                )
-                                                if (item.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
-                                                    add(
-                                                        ContextMenuItem(
-                                                            label = "Add Breakpoint Rule",
-                                                            icon = KNetIcons.Pause,
-                                                        ) {
-                                                            onAddBreakpointRule(item.transactionId)
-                                                        },
-                                                    )
-                                                }
-                                            }
+                                        val copied = if (item.recordId in selection.records && selection.records.size > 1) selectedCopyRecords else listOf(item.recordId)
+                                        val copyCapabilities = if (copied.size > 1) groupCopyCapabilities!! else remember(item.recordId, item.requestKind, item.status, item.contentType, item.rowKind) {
+                                            TrafficCopyMenuCapabilities.from(copied, listOf(item))
+                                        }
+                                        val contextMenuItems = remember(item.recordId, selection, copyCapabilities,
+                                            onExportItem, selectionActions, onSendToApiStudio, onAddNetworkCondition,
+                                            onAddBreakpointRule, onProtectedTrafficAction, onCopyDetails) {
+                                            trafficRowContextMenu(item.recordId, selection, TrafficContextMenuActions(
+                                                onExportItem, selectionActions?.export, onSendToApiStudio, onAddNetworkCondition,
+                                                onAddBreakpointRule, onProtectedTrafficAction, onCopyDetails), copyCapabilities)
                                         }
 
-                                        KNetContextMenuArea(items = contextMenuItems) {
+                                        KNetContextMenuArea(items = contextMenuItems, onOpen = {
+                                            if (selectionActions == null) onSelectTransaction(item.transactionId)
+                                            else selectionActions.select(item.recordId, TrafficSelectionGesture.CONTEXT)
+                                        }) {
                                             TableRowItem(
                                                 item = item,
-                                                isSelected = item.transactionId == selectedId,
+                                                isSelected = if (selection.records.isNotEmpty()) item.recordId in selection.records else item.transactionId == selectedId,
                                                 columnVisibility = columnVisibility,
                                                 columnLayout = columnLayout,
                                                 todayDate = todayDateState.value,
                                                 activeRules = activeRules,
-                                                onClick = { onSelectTransaction(item.transactionId) }
+                                                onClick = { gesture ->
+                                                    if (selectionActions == null) onSelectTransaction(item.transactionId)
+                                                    else selectionActions.select(item.recordId, gesture)
+                                                }
                                             )
                                         }
                                     }
@@ -567,6 +532,7 @@ private fun TableHeaderRow(
 }
 
 @Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun TableRowItem(
     item: TrafficRowUiState,
     isSelected: Boolean,
@@ -574,11 +540,12 @@ private fun TableRowItem(
     columnLayout: ResolvedTrafficColumnLayout,
     todayDate: String,
     activeRules: List<com.devuloopers.knet.domain.rules.model.BreakpointRule>,
-    onClick: () -> Unit
+    onClick: (TrafficSelectionGesture) -> Unit
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
+    var clickGesture by remember { mutableStateOf(TrafficSelectionGesture.REPLACE) }
 
     val isPausedByBreakpoint = item.interception is TrafficInterceptionUiState.Paused
     val isMatchedByBreakpoint = item.interception !is TrafficInterceptionUiState.None
@@ -647,11 +614,21 @@ private fun TableRowItem(
     }
 
     KNetRow(
-        onClick = onClick,
+        onClick = { val gesture = clickGesture; clickGesture = TrafficSelectionGesture.REPLACE; onClick(gesture) },
         selected = isSelected,
         modifier = Modifier
             .height(TrafficTableMetrics.rowHeight)
             .then(rowBackgroundModifier)
+            .onPointerEvent(PointerEventType.Press) { event ->
+                val modifiers = event.keyboardModifiers
+                val additive = modifiers.isMetaPressed || modifiers.isCtrlPressed
+                clickGesture = when {
+                    modifiers.isShiftPressed && additive -> TrafficSelectionGesture.EXTEND_RANGE
+                    modifiers.isShiftPressed -> TrafficSelectionGesture.RANGE
+                    additive -> TrafficSelectionGesture.TOGGLE
+                    else -> TrafficSelectionGesture.REPLACE
+                }
+            }
     ) {
         // # (Serial Number)
         if (columnVisibility.isVisible(TrafficColumn.SERIAL_NUMBER)) {

@@ -56,6 +56,8 @@ public data class ProtocolMessagePresentation(
     public val schemaName: String? = null,
     /** Protocol-owned captured fields; Traffic renders these without parsing protocol payloads itself. */
     public val fields: List<InspectionField> = emptyList(),
+    /** Optional protocol-decoded application data, such as joined SSE data fields. */
+    public val dataText: String? = null,
 ) {
     init {
         require(title.isNotBlank()) { "Protocol message presentation title must not be blank." }

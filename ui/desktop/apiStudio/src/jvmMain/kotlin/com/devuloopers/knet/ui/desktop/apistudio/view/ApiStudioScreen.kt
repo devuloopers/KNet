@@ -314,6 +314,9 @@ fun ApiStudioScreen(
                                     errorMessage = uiState.errorMessage
                                 )
                                 ResponseInspectorView(
+                                    execution = uiState.exportSession,
+                                    executionCopyEnabled = true,
+                                    exportAction = { com.devuloopers.knet.ui.desktop.apistudio.export.StudioExportAction(uiState.exportSession) },
                                     state = inspectorState,
                                     actions = ResponseInspectorActions(
                                         onClearResponse = viewModel::clearResponse,

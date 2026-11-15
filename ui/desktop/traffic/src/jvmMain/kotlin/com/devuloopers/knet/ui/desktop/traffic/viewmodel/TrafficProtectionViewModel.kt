@@ -7,6 +7,7 @@ import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
 import com.devuloopers.knet.traffic.id.OpaqueFlowId
 import com.devuloopers.knet.traffic.model.OpaqueFlowSnapshot
 import com.devuloopers.knet.application.contract.traffic.TrafficSource
+import com.devuloopers.knet.application.contract.traffic.TrafficRecordId
 import kotlinx.coroutines.flow.Flow
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.CancellationException
@@ -104,6 +105,28 @@ class TrafficProtectionViewModel(
                 SetProtectedTrafficFlowActionResult.SourceApplicationUnavailable -> error("A verified source application is unavailable for this flow.")
                 SetProtectedTrafficFlowActionResult.DestinationUnavailable -> error("The selected flow has no valid destination.")
             }
+        }
+    }
+
+    /** Saves the original request's destination without treating an exchange ID as an opaque-flow ID. */
+    fun applyRecordAction(record: TrafficRecordId, action: ProtectedTrafficAction, onFailure: (String) -> Unit) {
+        if (record is TrafficRecordId.Opaque) {
+            applyFlowAction(record.id.value, action, ProtectedTrafficQuickRuleScope.DESTINATION)
+            return
+        }
+        if (mutation?.isActive == true) return
+        mutation = viewModelScope.launch {
+            mutableState.update { it.copy(isApplying = true) }
+            try {
+                when (setFlowAction.execute(record, action)) {
+                    is SetProtectedTrafficFlowActionResult.Saved -> Unit
+                    SetProtectedTrafficFlowActionResult.MissingFlow -> onFailure("The selected request no longer exists.")
+                    else -> onFailure("The selected request has no valid destination.")
+                }
+            } catch (failure: Exception) {
+                if (failure is CancellationException) throw failure
+                onFailure(failure.message ?: "Unable to update connection handling.")
+            } finally { mutableState.update { it.copy(isApplying = false) } }
         }
     }
 

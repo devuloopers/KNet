@@ -44,6 +44,12 @@ public data class CompanionUiState(
     public val network: CompanionNetworkState = CompanionNetworkState.Unknown,
     public val discovery: CompanionDiscoveryState = CompanionDiscoveryState.Idle,
     public val inspectionPermissionRequired: Boolean = false,
+    /** Last authoritative recording status for the selected desktop/device. */
+    public val desktopCaptureStatus: com.devuloopers.knet.companion.model.CompanionDesktopCaptureState = com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.UNKNOWN,
+    /** One prompt per stopped/paused transition; dismissing does not alter desktop recording. */
+    public val desktopCaptureNotice: com.devuloopers.knet.companion.model.CompanionDesktopCaptureState? = null,
+    /** A blocked initial connect retains its prompt while no VPN-owned control session exists. */
+    public val captureNoticeFromPreflight: Boolean = false,
     public val operationInProgress: Boolean = false,
     public val failure: CompanionFailure? = null,
 ) {

@@ -16,6 +16,8 @@ import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficSource
 import com.devuloopers.knet.application.contract.traffic.TrafficMaintenance
+import com.devuloopers.knet.application.contract.traffic.TrafficRecordId
+import com.devuloopers.knet.application.contract.traffic.OpaqueTrafficPageItem
 import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.application.contract.traffic.TrafficSessionCatalog
 import com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore
@@ -45,6 +47,9 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficIntent
 import com.devuloopers.knet.ui.desktop.traffic.model.SchemeFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.HttpVersionFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficSelectionGesture
+import com.devuloopers.knet.ui.desktop.traffic.model.MethodFilter
+import com.devuloopers.knet.ui.desktop.traffic.model.recordId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -78,11 +83,109 @@ class TrafficPagingViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
+    fun `context selection moves inspector focus and export together while preserving an existing selected group`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(
+            snapshot("first", 1), snapshot("second", 2), snapshot("third", 3)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        val first = TrafficRecordId.Exchange(ExchangeId("first"))
+        val second = TrafficRecordId.Exchange(ExchangeId("second"))
+        val third = TrafficRecordId.Exchange(ExchangeId("third"))
+        viewModel.processIntent(TrafficIntent.SelectTraffic(first, TrafficSelectionGesture.CONTEXT)); advanceUntilIdle()
+        assertEquals("first", viewModel.uiState.value.selectedTransactionId)
+        assertEquals(listOf(first), viewModel.exportSelection()?.records)
+        viewModel.processIntent(TrafficIntent.SelectTraffic(second, TrafficSelectionGesture.TOGGLE)); advanceUntilIdle()
+        val group = viewModel.uiState.value.selection
+        viewModel.processIntent(TrafficIntent.SelectTraffic(first, TrafficSelectionGesture.CONTEXT)); advanceUntilIdle()
+        assertEquals(group, viewModel.uiState.value.selection)
+        assertEquals("first", viewModel.uiState.value.selectedTransactionId)
+        assertEquals(listOf(second, first), viewModel.exportSelection()?.records)
+        viewModel.processIntent(TrafficIntent.SelectTraffic(third, TrafficSelectionGesture.CONTEXT)); advanceUntilIdle()
+        assertEquals("third", viewModel.uiState.value.selectedTransactionId)
+        assertEquals(listOf(third), viewModel.exportSelection()?.records)
+        viewModel.processIntent(TrafficIntent.ClearTrafficSelection)
+        viewModel.processIntent(TrafficIntent.SelectTraffic(third, TrafficSelectionGesture.CONTEXT)); advanceUntilIdle()
+        assertEquals(listOf(third), viewModel.exportSelection()?.records)
+    }
+
+    @Test
+    fun `initial HTTP and opaque focus immediately export exactly that typed record`() = runTest(dispatcher) {
+        val session = CaptureSessionId("fake-session")
+        val flow = com.devuloopers.knet.ui.desktop.traffic.protection.ProtectionFixture().captured
+        for (opaque in listOf(false, true)) {
+            val base = LiveTrafficPort(session, listOf(snapshot(flow.id.value, 1)))
+            val port = object : TrafficQuery by base {
+                override suspend fun query(query: TrafficPageQuery): TrafficPage = if (!opaque) base.query(query)
+                    else TrafficPage(items = emptyList(), opaqueItems = listOf(OpaqueTrafficPageItem(
+                        TrafficCaptureSequence(1), TrafficHistorySequence(1), flow)), nextCursor = null, totalCount = 1, generation = 1)
+                override suspend fun getOpaqueFlow(flowId: com.devuloopers.knet.traffic.id.OpaqueFlowId) = flow.takeIf { it.id == flowId }
+            }
+            val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+            advanceUntilIdle()
+            val expected = if (opaque) TrafficRecordId.Opaque(flow.id) else TrafficRecordId.Exchange(ExchangeId(flow.id.value))
+            val state = viewModel.uiState.value
+            assertEquals(flow.id.value, state.selectedTransactionId)
+            assertEquals(expected, state.selectedTransaction?.recordId)
+            assertEquals(setOf(expected), state.selection.records)
+            assertEquals(expected, state.selection.anchor)
+            val exported = assertNotNull(viewModel.exportSelection())
+            assertEquals(listOf(expected), exported.records)
+            assertEquals(state.source, exported.source)
+        }
+    }
+
+    @Test
+    fun `first live arrival initializes export once while gestures clearing and filters retain their meaning`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), emptyList(), honorFilters = true)
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        assertNull(viewModel.exportSelection())
+        assertNull(viewModel.uiState.value.selectedTransactionId)
+        port.record(snapshot("first", 1)); advanceUntilIdle()
+        val first = TrafficRecordId.Exchange(ExchangeId("first"))
+        val second = TrafficRecordId.Exchange(ExchangeId("second"))
+        val third = TrafficRecordId.Exchange(ExchangeId("third"))
+        val frozen = assertNotNull(viewModel.exportSelection())
+        assertEquals(listOf(first), frozen.records)
+        port.record(snapshot("second", 2)); advanceUntilIdle()
+        assertEquals(setOf(first), viewModel.uiState.value.selection.records)
+        viewModel.processIntent(TrafficIntent.SelectTraffic(second, TrafficSelectionGesture.TOGGLE)); advanceUntilIdle()
+        port.record(snapshot("third", 3)); advanceUntilIdle()
+        assertEquals(setOf(first, second), viewModel.uiState.value.selection.records)
+        assertEquals(listOf(second, first), viewModel.exportSelection()?.records)
+        assertEquals(listOf(first), frozen.records)
+        viewModel.processIntent(TrafficIntent.ClearTrafficSelection)
+        port.invalidate(); advanceUntilIdle()
+        assertNull(viewModel.exportSelection())
+        viewModel.processIntent(TrafficIntent.SelectTraffic(third, TrafficSelectionGesture.REPLACE))
+        viewModel.processIntent(TrafficIntent.SelectTraffic(third, TrafficSelectionGesture.TOGGLE))
+        port.invalidate(); advanceUntilIdle()
+        assertNull(viewModel.exportSelection())
+        viewModel.processIntent(TrafficIntent.FilterByMethod(MethodFilter.GET)); advanceUntilIdle()
+        assertEquals(listOf(third), viewModel.exportSelection()?.records)
+    }
+
+    @Test
+    fun `row action error belongs only to the original traffic source`() = runTest(dispatcher) {
+        val viewModel = FakeTrafficViewModelFactory.create()
+        advanceUntilIdle()
+        val source = viewModel.uiState.value.source
+        val other = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId("other-device"))
+        viewModel.processIntent(TrafficIntent.ReportActionError(other, "Other source failed"))
+        assertNull(viewModel.uiState.value.trafficErrorMessage)
+        viewModel.processIntent(TrafficIntent.ReportActionError(source, "Unable to save destination rule"))
+        assertEquals("Unable to save destination rule", viewModel.uiState.value.trafficErrorMessage)
+        viewModel.processIntent(TrafficIntent.DismissEngineError)
+        assertNull(viewModel.uiState.value.trafficErrorMessage)
+    }
+
+    @Test
     fun `keyset loading retains at most one thousand body-free rows`() = runTest(dispatcher) {
         val port = FakePagedPort(1_250)
         val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
         advanceUntilIdle()
         assertEquals(200, viewModel.uiState.value.transactions.size)
+        val initialSelection = assertNotNull(viewModel.exportSelection())
         assertEquals(1_250L, viewModel.uiState.value.totalAvailableCount)
         assertEquals(1_250L, viewModel.uiState.value.transactions.first().sequenceNumber)
 
@@ -107,6 +210,7 @@ class TrafficPagingViewModelTest {
         assertEquals("exchange-1249", state.transactions.last().transactionId)
         assertTrue(port.requestedLimits.all { it == 200 })
         assertEquals(1_000, state.transactions.map { it.transactionId }.distinct().size)
+        assertEquals(initialSelection, viewModel.exportSelection(), "Evicting the initial row must not broaden or replace export selection")
     }
 
     @Test
@@ -523,16 +627,21 @@ class TrafficPagingViewModelTest {
         val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
         advanceUntilIdle()
         viewModel.selectSource(sourceA); advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.selection.records.size)
         viewModel.processIntent(TrafficIntent.Search("GET")); advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.selection.records.size)
         viewModel.processIntent(TrafficIntent.SelectTransaction(sourceA.preferenceKey)); advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.ClearTrafficSelection)
         viewModel.selectSource(sourceB)
         viewModel.retainViewport(sourceA, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(7, 11, 22))
         advanceUntilIdle()
         assertEquals("", viewModel.uiState.value.searchQuery)
         assertEquals(sourceB.preferenceKey, viewModel.uiState.value.transactions.single().transactionId)
+        assertEquals(listOf(TrafficRecordId.Exchange(ExchangeId(sourceB.preferenceKey))), viewModel.exportSelection()?.records)
         viewModel.selectSource(sourceA); advanceUntilIdle()
         assertEquals("GET", viewModel.uiState.value.searchQuery)
         assertEquals(sourceA.preferenceKey, viewModel.uiState.value.selectedTransactionId)
+        assertNull(viewModel.exportSelection(), "Returning to a device must preserve its explicit deselection")
         assertEquals(7, viewModel.uiState.value.viewport.row)
         assertEquals(22, viewModel.uiState.value.viewport.horizontal)
         assertTrue(seen.filter { it.source == sourceA }.any { it.searchContains == "GET" })

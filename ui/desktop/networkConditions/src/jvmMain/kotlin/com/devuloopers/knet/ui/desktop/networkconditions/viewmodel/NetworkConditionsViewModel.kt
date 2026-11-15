@@ -50,6 +50,11 @@ class NetworkConditionsViewModel(
         NetworkConditionsState(protocolDefinitions = protocolRules.definitions()),
     )
     val state: StateFlow<NetworkConditionsState> = mutableState.asStateFlow()
+    /** Configuration-only observer used by the Traffic shortcut; sampled rates remain local to the graph. */
+    val quickControlState: StateFlow<com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsQuickControlState> =
+        com.devuloopers.knet.application.contract.device.ProjectedStateFlow(state) {
+            com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsQuickControlState(it.configuration, it.errorMessage)
+        }
     private val throughputSampler = NetworkThroughputSampler()
     private var runtimeMonitoringJob: Job? = null
 
@@ -188,6 +193,16 @@ class NetworkConditionsViewModel(
                 errorMessage = null,
             )
         }
+    }
+
+    /** Opens a validated import as a private editable draft, preserving any existing unsaved editor. */
+    fun openImportedDraft(draft: com.devuloopers.knet.application.contract.importcapture.CaptureImportActionDraft.NetworkConditions) {
+        check(!state.value.isSaving && state.value.ruleDraft == null) { "Finish or close the current Network Conditions rule first." }
+        selectWorkspace(draft.workspace)
+        mutableState.update { it.copy(activeTab = NetworkConditionsTab.RULES,
+            ruleDraft = NetworkConditionRuleDraft(hostPattern = draft.target.normalizedHost, port = draft.target.port?.toString().orEmpty(),
+                existingRuleId = null, profileId = NetworkConditionBuiltIns.NO_THROTTLING.id, protocolId = draft.criteria.protocolId,
+                protocolValues = draft.values, context = RuleEditContext(draft.workspace), workspaceName = it.workspaceName), errorMessage = null) }
     }
 
     fun beginEditRule(rule: NetworkConditionRule) {

@@ -66,6 +66,9 @@ internal class NativeCompanionControlSession(
                                             if (message.configuration?.enabled == false) CompanionPolicyAcknowledgement.APPLIED
                                             else CompanionPolicyAcknowledgement.UNSUPPORTED)
                                     }
+                                    // The foreground app reads recording status over pinned HTTPS; this extension
+                                    // must accept the negotiated status without altering packet policy or liveness.
+                                    CompanionSessionMessageKind.CAPTURE_STATUS -> Unit
                                     CompanionSessionMessageKind.POLICY_RENEWAL -> Unit
                                     CompanionSessionMessageKind.REVOKED -> { onRevoked(); throw Revoked() }
                                     else -> throw CompanionSessionException(CompanionSessionFailure.INVALID_MESSAGE)

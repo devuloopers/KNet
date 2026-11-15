@@ -113,3 +113,11 @@ Owns ephemeral read-only query previews, native JSON manifest selection and type
 application use cases. The toolbar never inserts lookup source into the request. A debounced, latest-only preview
 observes editor identity and catalog revision; replay and saved drafts retain actual wire fields.
 See `docs/graphql_persisted_queries.md`.
+
+## Response Copy
+
+HTTP quick copy follows the response Body/Headers/Cookies tab. The same execution-owned control is
+exposed to native protocol editors through the public shell extension slot, and live HTTP streams
+provide event copy. Request draft edits cannot change the copied execution. Actual response evidence
+controls eligibility, including received error responses. Shared catalogue/ViewModel/renderer ownership
+is documented in `docs/api_studio_copy.md`; responsive native/live toolbars use `:ui:core`.

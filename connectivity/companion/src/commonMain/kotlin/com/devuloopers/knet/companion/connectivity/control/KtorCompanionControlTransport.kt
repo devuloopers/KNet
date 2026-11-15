@@ -44,6 +44,9 @@ internal class KtorCompanionControlTransport(
     }
 
     private fun CompanionControlOperation.toWireOperation(): ControlWireOperation = when (this) {
+        CompanionControlOperation.FETCH_CAPTURE_STATUS -> ControlWireOperation(
+            CompanionHttpMethod.GET, CompanionControlProtocol.CAPTURE_STATUS_PATH, null, CompanionControlProtocol.CAPTURE_STATUS_MEDIA_TYPE,
+        )
         CompanionControlOperation.PAIR -> ControlWireOperation(
             method = CompanionHttpMethod.POST,
             path = CompanionControlProtocol.PAIR_PATH,

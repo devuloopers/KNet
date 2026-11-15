@@ -165,6 +165,9 @@ private class WebSocketExecutionSession(
                 connected.completeExceptionally(failure)
                 eventFlow.tryEmit(ApiStudioProtocolExecutionEvent.Failed(
                     code = "websocket_connect_failed",
+                    serverResponseReceived = generateSequence(failure as Throwable?) { it.cause }.take(8).any { it is java.net.http.WebSocketHandshakeException },
+                    responseStatus = generateSequence(failure as Throwable?) { it.cause }.take(8).filterIsInstance<java.net.http.WebSocketHandshakeException>().firstOrNull()?.response?.statusCode(),
+                    responseHeaders = generateSequence(failure as Throwable?) { it.cause }.take(8).filterIsInstance<java.net.http.WebSocketHandshakeException>().firstOrNull()?.response?.headers()?.map()?.flatMap { (name, values) -> values.map { name to it } }.orEmpty(),
                     message = failure.message ?: "WebSocket connection failed.",
                     retryable = true,
                 ))
@@ -211,6 +214,7 @@ private class WebSocketExecutionSession(
     override fun onOpen(webSocket: WebSocket) {
         eventFlow.tryEmit(ApiStudioProtocolExecutionEvent.Started(
             summary = "WebSocket ${draft.url}",
+            serverResponseReceived = true,
             negotiatedApplicationProtocol = webSocket.subprotocol.takeIf(String::isNotBlank),
         ))
         connected.complete(Unit)
@@ -307,6 +311,9 @@ private class WebSocketExecutionSession(
             connected.completeExceptionally(error)
             eventFlow.tryEmit(ApiStudioProtocolExecutionEvent.Failed(
                 code = "websocket_session_failed",
+                serverResponseReceived = generateSequence(error as Throwable?) { it.cause }.take(8).any { it is java.net.http.WebSocketHandshakeException },
+                responseStatus = generateSequence(error as Throwable?) { it.cause }.take(8).filterIsInstance<java.net.http.WebSocketHandshakeException>().firstOrNull()?.response?.statusCode(),
+                responseHeaders = generateSequence(error as Throwable?) { it.cause }.take(8).filterIsInstance<java.net.http.WebSocketHandshakeException>().firstOrNull()?.response?.headers()?.map()?.flatMap { (name, values) -> values.map { name to it } }.orEmpty(),
                 message = error.message ?: "WebSocket session failed.",
                 retryable = true,
                 actualProtocol = "WebSocket",

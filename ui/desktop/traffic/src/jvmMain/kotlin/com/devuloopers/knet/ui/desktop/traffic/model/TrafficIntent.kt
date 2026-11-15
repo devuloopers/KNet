@@ -18,6 +18,8 @@ sealed interface TrafficIntent {
     /** Reveals and acknowledges latest traffic without changing the Manual switch. */
     data object JumpToLatest : TrafficIntent
     data object DismissEngineError : TrafficIntent
+    /** Reports a failed row action only while its original source is still displayed. */
+    data class ReportActionError(val source: com.devuloopers.knet.application.contract.traffic.TrafficSource, val message: String) : TrafficIntent
     data object LoadNextPage : TrafficIntent
     /** Loads the next adjacent block toward the actual newest record, preserving the visible anchor. */
     data object LoadNewerPage : TrafficIntent
@@ -30,6 +32,12 @@ sealed interface TrafficIntent {
     data class FilterByStatus(val status: StatusFilter) : TrafficIntent
 
     data class SelectTransaction(val id: String?) : TrafficIntent
+    /** Selects canonical rows without teaching pointer/keyboard details to the ViewModel. */
+    data class SelectTraffic(val id: com.devuloopers.knet.application.contract.traffic.TrafficRecordId, val gesture: TrafficSelectionGesture) : TrafficIntent
+    /** Explicitly selects only metadata currently loaded, retaining the bounded table contract. */
+    data object SelectLoadedTraffic : TrafficIntent
+    /** Clears the export selection without resetting inspector state. */
+    data object ClearTrafficSelection : TrafficIntent
     data class SelectInspectorTab(val tab: InspectorTab) : TrafficIntent
     data class SelectProtocolMessage(val id: ProtocolMessageId) : TrafficIntent
     data object LoadNextProtocolMessagePage : TrafficIntent

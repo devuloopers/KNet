@@ -145,3 +145,19 @@ Workspace tabs expose an optional independently focusable Close button with a st
 The compact-tab appearance uses theme-owned 32 dp rounded controls, 6 dp gaps, tonal inactive surfaces and a blue selected outline/tint inside the existing 40 dp strip. Device identity suffixes have independent secondary typography. Hover/focus painting does not change measured tab dimensions or native interactive bounds.
 
 Workspace tab names size to content within a 360 dp cap; the row retains horizontal overflow. Full-label hover help anchors only to the name so it cannot overlap the independent Close help. Secondary identity text and actions retain their own width.
+
+## Continuous native-file import surface
+
+`foundation/drop/NativeFileDrop.jvm.kt` is the exact approved native transfer adapter. It snapshots
+bounded local paths during the native transfer and queues delivery after drop completion. The stable
+receiver lets presentation reserve its current surface synchronously, before native onEnded. One
+in-window surface owns fixed theme bounds, focus/input containment, color transitions and scroll
+clearance. There is no import-specific native dialog size API. See `docs/capture_drop_actions.md`.
+
+## Anchored copy controls
+
+`KNetActionMenu` reuses the themed context-menu panel, nested navigation and keyboard owner for
+button-anchored actions. It freezes callbacks at opening, flips/clamps within the window and closes
+when disabled or its owner changes. `KNetSplitCopyButton` owns direct/arrow grouping, theme sizing,
+content-sized animated label width, accessible feedback and copied/error icons. Legacy icon copy dropdowns also use
+this popup rather than a separate Material dropdown. See `docs/api_studio_copy.md`.

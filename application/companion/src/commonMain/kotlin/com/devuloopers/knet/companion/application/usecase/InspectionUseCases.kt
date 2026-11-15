@@ -53,14 +53,23 @@ public class StartCompanionInspectionUseCase(
     private val inspection: CompanionInspectionController,
     private val transport: CompanionTransport,
     private val fetchPacketConditions: FetchCompanionPacketConditionsUseCase? = null,
+    private val fetchCaptureStatus: FetchCompanionCaptureStatusUseCase? = null,
 ) {
     public suspend fun execute(
         mode: CompanionInspectionMode = CompanionInspectionMode.DEVICE_VPN,
         unsupportedTrafficPolicy: UnsupportedTrafficPolicy = UnsupportedTrafficPolicy.REJECT,
         packetConditions: PacketConditionConfiguration? = null,
     ): StartCompanionInspectionResult {
-        registrations.activeRegistration.value
+        val original = registrations.activeRegistration.value
             ?: return StartCompanionInspectionResult.Rejected(registrationMissing())
+        val captureStatus = fetchCaptureStatus?.execute(original)
+            ?: com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.UNKNOWN
+        if (registrations.activeRegistration.value != original)
+            return StartCompanionInspectionResult.Rejected(registrationMissing())
+        if (captureStatus == com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.STOPPED ||
+            captureStatus == com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.STARTING)
+            return StartCompanionInspectionResult.Rejected(CompanionFailure(CompanionFailureCode.DESKTOP_CAPTURE_STOPPED,
+                "Start Capture for this device in KNet desktop, then check again.", true))
         return when (val preparation = inspection.prepare()) {
             CompanionInspectionPreparationResult.ConsentRequired -> StartCompanionInspectionResult.VpnConsentRequired
             is CompanionInspectionPreparationResult.Failed -> StartCompanionInspectionResult.Rejected(preparation.failure)
@@ -116,6 +125,7 @@ public class StartCompanionInspectionUseCase(
                 when (started) {
                     CompanionInspectionStartResult.Started -> StartCompanionInspectionResult.Started(
                         fullHttpsInspection = configuration.fullHttpsInspection,
+                        desktopCaptureStatus = captureStatus,
                     )
                     is CompanionInspectionStartResult.Failed -> {
                         cleanupFailedStart()
@@ -137,7 +147,10 @@ public class StartCompanionInspectionUseCase(
 
 /** Capture start outcome. */
 public sealed interface StartCompanionInspectionResult {
-    public data class Started(public val fullHttpsInspection: Boolean) : StartCompanionInspectionResult
+    public data class Started(public val fullHttpsInspection: Boolean,
+        /** Readiness at connection time; live authenticated session updates may subsequently replace it. */
+        public val desktopCaptureStatus: com.devuloopers.knet.companion.model.CompanionDesktopCaptureState = com.devuloopers.knet.companion.model.CompanionDesktopCaptureState.UNKNOWN,
+    ) : StartCompanionInspectionResult
     public data object VpnConsentRequired : StartCompanionInspectionResult
     public data class Rejected(public val failure: CompanionFailure) : StartCompanionInspectionResult
 }

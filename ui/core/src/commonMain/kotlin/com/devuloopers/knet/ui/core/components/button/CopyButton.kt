@@ -9,8 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -149,7 +147,6 @@ fun KNetCopyDropdownButton(
     val copyJobController = remember { CopyJobController() }
 
     var isCopied by remember { mutableStateOf(false) }
-    var isMenuExpanded by remember { mutableStateOf(false) }
     DisposableEffect(Unit) { onDispose(copyJobController::cancel) }
 
     fun performCopy(text: String) {
@@ -186,34 +183,12 @@ fun KNetCopyDropdownButton(
         )
 
         if (options.isNotEmpty()) {
-            Box {
-                KNetIconButton(
-                    onClick = { isMenuExpanded = true },
-                    icon = Icons.Default.ArrowDropDown,
-                    contentDescription = "Copy format options",
-                    tint = tint,
-                    size = size
-                )
-
-                DropdownMenu(
-                    expanded = isMenuExpanded,
-                    onDismissRequest = { isMenuExpanded = false }
-                ) {
-                    options.forEach { option ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = option.label,
-                                    style = KNetTheme.typography.bodySmall.copy(color = themeColors.textPrimary)
-                                )
-                            },
-                            onClick = {
-                                isMenuExpanded = false
-                                performCopy(option.getTextToCopy())
-                            }
-                        )
-                    }
-                }
+            com.devuloopers.knet.ui.core.components.menu.KNetActionMenu(
+                items = options.map { option -> com.devuloopers.knet.ui.core.components.menu.ContextMenuItem(option.label) { performCopy(option.getTextToCopy()) } },
+                ownerKey = copyJobController,
+            ) { open ->
+                KNetIconButton(onClick = open, icon = Icons.Default.ArrowDropDown,
+                    contentDescription = "Copy format options", tint = tint, size = size)
             }
         }
     }

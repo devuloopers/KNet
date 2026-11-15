@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTransportProtocol
 import com.devuloopers.knet.traffic.id.OpaqueFlowId
+import com.devuloopers.knet.application.contract.traffic.TrafficRecordId
+import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.OpaqueTransportProtocol
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -120,7 +122,7 @@ public sealed interface SetProtectedTrafficFlowActionResult {
     public data object DestinationUnavailable : SetProtectedTrafficFlowActionResult
 }
 
-/** Creates an application- or destination-scoped rule directly from one payload-opaque Traffic row. */
+/** Creates future-connection rules from canonical opaque records or captured request destinations. */
 public class SetProtectedTrafficFlowActionUseCase(
     private val trafficQuery: TrafficQuery,
     private val repository: ProtectedTrafficRepository,
@@ -166,6 +168,46 @@ public class SetProtectedTrafficFlowActionUseCase(
                 OpaqueTransportProtocol.UDP -> ProtectedTransportProtocol.UDP
             },
         )
+        return persist(scoped, workspace, candidate)
+    }
+
+    /**
+     * Creates a destination rule from a typed retained record, including ordinary HTTP/GraphQL/upgrade rows.
+     * The canonical authority and authenticated ingress own routing and workspace; display strings are ignored.
+     * This configures future protected connections, without rewriting or replaying the recorded request.
+     */
+    public suspend fun execute(record: TrafficRecordId, action: ProtectedTrafficAction): SetProtectedTrafficFlowActionResult {
+        if (record is TrafficRecordId.Opaque) return execute(record.id, action, ProtectedTrafficQuickRuleScope.DESTINATION)
+        val exchange = trafficQuery.getExchange((record as TrafficRecordId.Exchange).id)
+            ?: return SetProtectedTrafficFlowActionResult.MissingFlow
+        val destination = when (val target = exchange.request.head.target) {
+            is RequestTarget.Absolute -> target.authority.host to (target.authority.port ?: when (target.scheme.token.lowercase()) {
+                "https", "wss" -> 443
+                "http", "ws" -> 80
+                else -> return SetProtectedTrafficFlowActionResult.DestinationUnavailable
+            })
+            is RequestTarget.AuthorityForm -> target.authority.host to (target.authority.port
+                ?: return SetProtectedTrafficFlowActionResult.DestinationUnavailable)
+            else -> return SetProtectedTrafficFlowActionResult.DestinationUnavailable
+        }
+        val selector = runCatching { ProtectedDestinationSelector.parse(destination.first) }.getOrNull()
+            ?: return SetProtectedTrafficFlowActionResult.DestinationUnavailable
+        val workspace = PolicyWorkspace.fromIngress(exchange.connectionId?.let { trafficQuery.getConnectionIngress(it)?.ingress })
+        return saveDestination(workspace, selector, destination.second, action)
+    }
+
+    @OptIn(ExperimentalUuidApi::class)
+    private suspend fun saveDestination(workspace: PolicyWorkspace, destination: ProtectedDestinationSelector,
+        port: Int, action: ProtectedTrafficAction): SetProtectedTrafficFlowActionResult {
+        val scoped = repository.forWorkspace(workspace)
+        val candidate = ProtectedTrafficRule(ProtectedTrafficRuleId("protected_${Uuid.random()}"), action = action,
+            destination = destination, port = port, transport = ProtectedTransportProtocol.TCP)
+        return persist(scoped, workspace, candidate)
+    }
+
+    /** Saves against one captured workspace and waits for authoritative committed publication. */
+    private suspend fun persist(scoped: ProtectedTrafficRepository, workspace: PolicyWorkspace,
+        candidate: ProtectedTrafficRule): SetProtectedTrafficFlowActionResult {
         val catalog = withTimeoutOrNull(POLICY_PUBLICATION_TIMEOUT_MILLIS) { scoped.observeCatalog().first { it.ready } }
             ?: error("Current connection handling could not be loaded. Try again when policy settings are ready.")
         val existingDefinition = catalog.definitions.firstOrNull { it.availability == RuleAvailability.Private(workspace) &&

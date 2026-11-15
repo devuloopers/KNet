@@ -32,6 +32,10 @@ public sealed interface CompanionAction {
 
     /** Starts the inspection workflow, requesting native consent when required. */
     public data object StartInspectionRequested : CompanionAction
+    /** Dismisses only the informational recording notice, preserving VPN connectivity. */
+    public data object CaptureNoticeDismissed : CompanionAction
+    /** Rechecks a blocked initial connection after the user starts desktop capture. */
+    public data object RecheckDesktopCaptureRequested : CompanionAction
 
     /** Requests the native VPN consent surface after the shared explanation screen is visible. */
     public data object VpnConsentRequested : CompanionAction

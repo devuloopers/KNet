@@ -8,6 +8,25 @@ import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.flow.Flow
 
+
+/** Owned original bytes for archival consumers; decoding/pretty-printing never replaces this representation. */
+class HttpExecutionBytes(bytes: ByteArray) {
+    private val content = bytes.copyOf()
+    /** Independent bytes owned by the caller. */
+    fun copyBytes(): ByteArray = content.copyOf()
+    override fun equals(other: Any?): Boolean = other is HttpExecutionBytes && content.contentEquals(other.content)
+    override fun hashCode(): Int = content.contentHashCode()
+    override fun toString(): String = "HttpExecutionBytes(size=${content.size})"
+}
+
+/** Transport-observed sent request paired with the received response, including redirects and encoded entity. */
+data class HttpSentRequest(
+    val url: String,
+    val method: String,
+    val headers: List<Pair<String, String>>,
+    val body: HttpExecutionBytes?,
+)
+
 /**
  * Immutable response metadata published as soon as the transport receives the response head.
  *
@@ -23,6 +42,8 @@ data class HttpExecutionResponseHead(
     val headers: Map<String, String>,
     val cookies: Map<String, String>,
     val protocol: ApplicationProtocol?,
+    val orderedHeaders: List<Pair<String, String>> = headers.toList(),
+    val sentRequest: HttpSentRequest? = null,
 )
 
 /** Owned response bytes whose lifetime is independent of the transport callback that produced them. */

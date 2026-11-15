@@ -213,6 +213,10 @@ public object CompanionControlProtocol {
 
     /** Returns the current bounded packet-condition policy to an authenticated paired companion. */
     public const val NETWORK_CONDITIONS_PATH: String = "/companion/v1/network-conditions"
+    /** Authenticated recording readiness for the requesting device only. */
+    public const val CAPTURE_STATUS_PATH: String = "/companion/v1/capture-status"
+    /** Versioned bounded readiness representation, separate from traffic capture. */
+    public const val CAPTURE_STATUS_MEDIA_TYPE: String = "application/vnd.knet.companion-capture-status"
 
     /** Media type for a proof-bearing pairing completion request. */
     public const val PAIR_REQUEST_MEDIA_TYPE: String = "application/vnd.knet.companion-pair-request"
