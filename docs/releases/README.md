@@ -69,3 +69,10 @@ Failed upstream registration is a terminal candidate result even if the socket n
 loop. Happy Eyeballs cleanup uses Netty's direct transport close for that unregistered state, and ordinary
 channel close once registered. A deterministic incompatible-event-loop regression verifies the race
 completes exceptionally without throwing from cleanup or retaining its connection deadline.
+
+## Published 0.2.0 evidence
+
+The coordinated release is complete. [Desktop 0.2.0](https://github.com/devuloopers/KNet/releases/tag/desktop-v0.2.0)
+is Latest; [Companion 0.2.0](https://github.com/devuloopers/KNet/releases/tag/companion-v0.2.0) provides the
+signed Android APK. The [qualification report](qualification-0.2.0.md) records the verified source commit,
+workflow runs, repairs, payload/provenance checks and publication results.

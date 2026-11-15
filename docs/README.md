@@ -52,6 +52,8 @@ Traffic reading controls and arrival-count behavior are documented in
 Product versioning, draft staging, package verification and coordinated release retries are documented
 in [`releases/README.md`](releases/README.md). The 0.2.0 changes are recorded separately for
 [Desktop](releases/desktop-0.2.0.md) and [Companion](releases/companion-0.2.0.md).
+The [0.2.0 qualification report](releases/qualification-0.2.0.md) records successful hosted gates, verified
+packages/signing/provenance and public release URLs.
 
 ## Public website
 

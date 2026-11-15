@@ -1,43 +1,29 @@
 # KNet Implementation Plan
 
-## Coordinated Desktop and Companion 0.2.0 release (2026-11-15) [IN PROGRESS]
+## Coordinated Desktop and Companion 0.2.0 release (2026-11-15) [COMPLETED]
 
-Align product version defaults, restore CI on `master`, and stage both product releases as drafts
-from immutable build revisions. Run the qualification/package workflows, investigate failures and
-commit fixes until both pass. New unpublished release tags may advance together during preparation;
-published tags remain unchanged. Verify all expected packages, checksums and Android signing before
-publishing Desktop and Companion 0.2.0, then record the final commit and workflow/release evidence.
+Published Desktop and Companion 0.2.0 from the same verified source commit
+`0131e742ea197a55bc9a0137937c360455f23134`. Both release workflows and full CI passed. Desktop is the
+repository's Latest release, with 13 native installers/portable archives; Companion provides its signed
+Android APK (versionCode 2000). Kotlin iOS qualification and unsigned Debug/Release Simulator builds
+passed. The existing Android signing certificate and four native ABIs are preserved.
 
-Preparation passed local architecture verification, actionlint and eight synthetic draft-publication
-checks covering first creation, draft updates, published-release protection and changed-tag rejection.
-Product qualification, hosted native packaging and final publication remain in progress.
+Preparation restored CI on `master`, aligned product versions, made downstream release checkouts
+immutable, protected published releases, and staged drafts until verification completed. Qualification
+findings repaired Companion Home movement, Intel macOS SQLite packaging, shared native editor-font
+ownership, unregistered upstream-candidate cleanup, host-dependent timer tests, macOS fixture socket-buffer
+exhaustion and checksum-manifest self-inclusion. Previously published tags/releases were preserved.
 
-The first hosted cycle exposed an isolated dependency-resolution failure before compilation. A
-release audit also reproduced the existing checksum-manifest self-inclusion bug; both workflows now
-exclude the manifest from its input and verify generated checksums before staging release assets.
+Local checks passed all 185 proxy, 100 editor, 214 Traffic, 48 Companion UI and eight native-driver/migration
+cases. Linux x64 additionally passed the combined 224 native Traffic/editor cases. Ten consecutive
+100-client runs delivered all 1,000 exact 10 MiB responses within existing resource/time gates. All final
+hosted platform, protocol, feature, sustained-I/O, mobile and packaging gates passed on the tagged commit.
 
-Hosted qualification also exposed Companion Home control movement, an absent Intel macOS SQLite native
-payload, a wall-clock-dependent transport timer test, a concurrent-response truncation and a Linux x64
-native font crash. Home now reserves measured localized heading/footer height, SQLite is pinned to the
-compatible complete 2.6.2 native bundle, and timer tests advance Netty's frozen event-loop clock. The full
-local Companion UI suite, eight native-driver/migration cases and Linux ARM64's 214 Traffic tests pass.
-The full Traffic suite also passed in a Linux x64 container. Subsequent stress diagnostics identified
-macOS origin-side `No buffer space available` failures: the 100-client fixture now bounds kernel socket
-buffers without reducing concurrency, payload or resource gates. Background editor geometry now owns
-its font resolver per job instead of sharing rendering's native font collection; rapid resize/font-scale/
-disposal regression checks are being qualified. Hosted failure artifacts retain assertion causes and
-native-crash diagnostics. Android and iOS have each passed hosted qualification in their observed runs;
-publication remains blocked until all required gates pass together on the final source revision.
-
-The bounded fixture passed ten consecutive 100-client runs (1,000 exact 10 MiB responses). All 100
-editor and 214 Traffic JVM cases plus architecture verification pass locally. An additional Intel
-registration-failure diagnostic was reproduced deterministically: candidate cleanup attempted a normal
-channel close before an event loop existed. The dialer now closes unregistered candidates through Netty's
-transport cleanup path; the new regression and existing generated-response tests pass. Editor pointer
-fixtures now wait for actual asynchronous geometry readiness rather than a fixed frame delay, and the
-full editor suite is an explicit protocol/release gate. The complete proxy/editor suites pass locally,
-as do all 224 Traffic/editor render cases under Linux x64. Both unpublished tags will advance together
-to the repaired commit for the next complete hosted release cycle; final hosted verification is pending.
+Every package checksum matches GitHub's upload digest. Both downloaded manifests have verified signed
+provenance for their exact source/tag/workflow, and the Android APK passed package/version/signature/ZIP
+checks. Both public release pages and all 16 public asset download links were verified; public checksum
+manifests match the verified copies. See the [release qualification report](releases/qualification-0.2.0.md)
+for workflow links, findings, signing identity, publication times and physical-testing scope.
 
 ## Desktop website preview viewport fit (2026-11-15) [COMPLETED]
 
