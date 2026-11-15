@@ -74,6 +74,17 @@ Node's system font stack and local SVG symbols avoid remote fonts and an icon-li
 Header download controls collapse on narrow screens while the main download action remains visible;
 Docs and GitHub remain directly accessible. Images reserve their dimensions to prevent layout shift.
 
+At viewport widths of 1100px and above, the hero places its copy/download action on the left and the
+actual KNet preview on the right. A wider 1400px content cap, responsive desktop type/spacing and compact
+feature highlights match the approved desktop proposal. Smaller viewports keep the original centered,
+stacked presentation. The shared image `sizes` hint reflects its narrower desktop column without
+adding JavaScript or altering the image's aspect ratio.
+
+Desktop hero spacing also responds to viewport height. The screenshot width is capped by the height
+remaining after the header, hero spacing and frame borders, using the image's 5:3 ratio. The frame
+aligns to the start of its grid row so taller copy cannot push the screenshot below the initial
+viewport. Page content remains scrollable; there is no fixed-height page or clipped image treatment.
+
 All direct npm dependencies are exact versions and `npm ci` uses the checked-in lockfile. The scoped
 `@typescript-eslint/typescript-estree` minimatch override selects 11.0.1 to remove the vulnerable
 older transitive version under Node 22+/24. Lint, type checks, tests and `npm audit` verify that graph;

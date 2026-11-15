@@ -105,3 +105,46 @@ Coolify request or registry push was executed. actionlint v1.7.12 and whitespace
 The upstream `master` default branch and current Coolify POST/bearer/deploy-permission documentation
 were checked during this increment. Exact public variable, environment-secret names, resource
 settings and rollback behavior are in [website deployment instructions](website.md#exact-github-configuration).
+
+## Desktop hero revision
+
+The approved desktop proposal is implemented at 1100px and above. Copy and download sit beside the
+actual product screenshot, with smaller responsive type/spacing and a compact feature row. Smaller
+viewports retain their original layout. The image source-size hint now accounts for its desktop column.
+
+Verification for this revision passed:
+
+- Static build with strict TypeScript checks and ESLint.
+- All 20 existing unit cases and 39 Chromium/Firefox/WebKit browser cases, including automated
+  accessibility, keyboard focus, reduced motion, 200% zoom and no-JavaScript rendering.
+- Ten rendered layouts: 375x1000, 768x1000, 1024x1000, 1099x1000, 1100x768, 1280x720,
+  1366x768, 1440x900, 1600x1000 and 1920x1080. No horizontal overflow or desktop column/action
+  overlap was found. Both hero copy and the complete preview fit inside the first viewport at all
+  six checked desktop sizes.
+- Before/after full-page PNG comparisons at 375, 768, 1024 and 1099 pixels are byte-identical.
+- Build budget: 1,892 gzip bytes of CSS and zero production JavaScript; the default WebP remains
+  55,798 bytes. No dependencies or hosting configuration changed.
+
+The updated [desktop preview](assets/knet-website-desktop.png) shows the actual implementation.
+Before/after images and measured geometry are retained in
+`/Users/devuloopers/.codex/verification/knet-website-desktop-hero-2026-11-15/`.
+These results qualify the local revision; publishing it requires its deployment workflow.
+
+## Desktop viewport height correction
+
+A shorter desktop browser reproduced the reported cutoff: at 1600x650 the preview ended at
+714.6px, 64.6px below the visible viewport. Width-only checks at taller viewports did not expose it.
+Desktop spacing now uses small viewport height units, and the image width is capped from the height
+left after the header, spacing and border. Start alignment prevents taller copy from pushing the
+image downward. Its full 5:3 contents remain intact and the rest of the page can still scroll.
+
+The static build, lint, formatting and all 39 existing cross-browser cases passed again. Additional
+resize/height verification passed 24 checks across Chromium, Firefox and WebKit at 1100x600,
+1280x600, 1440x650, 1600x500, 1600x650, 1920x600, 1920x768 and 1600x1000. These measure first-viewport
+image visibility, header separation, retained image ratio, unclipped frame height and horizontal
+containment while resizing the same page. Four full-page PNGs at 375/768/1024/1099px remain
+byte-identical to the pre-redesign phone/tablet baseline. The final build contains zero production
+JavaScript and 1,992 gzip bytes of CSS; image assets and dependencies are unchanged.
+
+Measured geometry and viewport screenshots are retained at
+`/Users/devuloopers/.codex/verification/knet-website-viewport-fit-2026-11-15/`.

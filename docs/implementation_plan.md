@@ -1,5 +1,32 @@
 # KNet Implementation Plan
 
+## Desktop website preview viewport fit (2026-11-15) [COMPLETED]
+
+Account for desktop browser height as well as width so the full product image is visible on initial
+load in shorter browser windows. Scale the image proportionally within the available viewport,
+reduce desktop-only vertical spacing with viewport height, and let page content continue scrolling.
+Preserve the existing phone/tablet presentation and verify short-window and resize behavior.
+
+Reproduced a 64.6px cutoff at 1600x650 before the fix. The build, lint, formatting, all 39 existing
+browser cases and 24 additional short-window/resize checks passed across Chromium, Firefox and
+WebKit. Four phone/tablet PNG comparisons remain byte-identical. The image retains its full 5:3
+content; the production bundle has no JavaScript and 1,992 gzip bytes of CSS. Evidence is recorded
+in [`website_qualification.md`](website_qualification.md#desktop-viewport-height-correction).
+
+## Desktop website hero layout (2026-11-15) [COMPLETED]
+
+Apply the approved split hero at viewport widths of 1100px and above: left-aligned headline and
+download action beside the actual product screenshot, followed by compact feature highlights.
+Preserve the existing stacked layout below that breakpoint. Keep responsive image sizing accurate,
+verify the screenshot fits in common desktop viewports, and compare mobile/tablet renders before
+and after alongside the existing browser, accessibility and static-build checks.
+
+The build, lint, all 20 unit cases and all 39 Chromium/Firefox/WebKit cases passed. Additional
+rendered checks cover ten widths from 375px through 1920px, including both sides of the breakpoint.
+Four phone/tablet renders are pixel-identical to the prior build; the complete preview is visible in
+the initial viewport at all six checked desktop sizes. Production remains JavaScript-free with
+1,892 gzip bytes of CSS. See [`website_qualification.md`](website_qualification.md#desktop-hero-revision).
+
 ## Automatic website delivery through Coolify (2026-11-15) [COMPLETED]
 
 Adapt Giot's verified-release delivery pattern: website pushes/manual runs on `master` build and

@@ -213,6 +213,92 @@ h1 span {
   width: 32px;
   height: 32px;
 }
+/* The approved split hero is desktop-only; smaller viewports retain the stacked layout. */
+@media (min-width: 1100px) {
+  :root {
+    --content-width: 1400px;
+    --gutter: 56px;
+    --site-header-height: 88px;
+  }
+  .site-header {
+    min-height: var(--site-header-height);
+  }
+  .hero {
+    --hero-space-before: clamp(24px, 8.2svh, 82px);
+    --hero-space-after: clamp(24px, 7.2svh, 72px);
+    /* Reserve the header, vertical spacing and the preview's two 1px borders. */
+    --preview-max-height: max(
+      1px,
+      calc(
+        100svh - var(--site-header-height) - var(--hero-space-before) -
+          var(--hero-space-after) - 2px
+      )
+    );
+    width: min(calc(100% - var(--gutter) * 2), var(--content-width));
+    margin-inline: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.95fr);
+    gap: clamp(32px, 3.25vw, 52px);
+    align-items: center;
+    padding-block: var(--hero-space-before) var(--hero-space-after);
+  }
+  .hero-copy.container {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+  }
+  .eyebrow {
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-bottom: 26px;
+  }
+  h1 {
+    font-size: clamp(40px, 3.5vw, 56px);
+    line-height: 1.1;
+    letter-spacing: -0.046em;
+  }
+  .hero-description {
+    font-size: 18px;
+    line-height: 1.65;
+    max-width: 350px;
+    margin: 25px 0 29px;
+  }
+  .product-preview.container {
+    /* Keep the complete 5:3 screenshot inside both its column and the first viewport. */
+    width: min(100%, calc(var(--preview-max-height) * 5 / 3 + 2px));
+    margin: 0;
+    justify-self: end;
+    align-self: start;
+    border-radius: 10px;
+    box-shadow: 0 22px 60px rgb(0 0 0 / 27%);
+  }
+  .features {
+    padding-block: 38px 44px;
+    border-block: 1px solid var(--border);
+  }
+  .features li {
+    flex-direction: row;
+    justify-content: center;
+    gap: 14px;
+    padding: 8px 16px;
+  }
+  .features svg {
+    width: 26px;
+    height: 26px;
+    color: var(--accent);
+  }
+  .features h2 {
+    font-size: 17px;
+  }
+  .project-note {
+    font-size: 14px;
+    margin-block: 29px;
+  }
+  .site-footer {
+    min-height: 88px;
+  }
+}
 @media (max-width: 700px) {
   .site-header {
     min-height: 80px;

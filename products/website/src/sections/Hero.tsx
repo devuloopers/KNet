@@ -1,6 +1,10 @@
 import { DownloadLink } from "../components/DownloadLink";
 import { preview } from "../../.generated/preview";
 
+// Wide desktops use a two-column hero; smaller screens retain the full-width preview.
+const previewSizes =
+  "(min-width: 1512px) 907px, (min-width: 1100px) 62vw, 94vw";
+
 /** One sentence and the actual deterministic KNet render keep the homepage product-focused. */
 export function Hero() {
   return (
@@ -22,12 +26,12 @@ export function Hero() {
           <source
             type="image/avif"
             srcSet={preview.avif}
-            sizes="(max-width: 1280px) 94vw, 1200px"
+            sizes={previewSizes}
           />
           <img
             src={preview.default}
             srcSet={preview.webp}
-            sizes="(max-width: 1280px) 94vw, 1200px"
+            sizes={previewSizes}
             width="1600"
             height="960"
             fetchPriority="high"
