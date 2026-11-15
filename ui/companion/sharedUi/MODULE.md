@@ -54,3 +54,11 @@ Scan enters native permission directly. Denials keep Connect visible, and an exp
 Settings sheet when prompting is blocked. Pending intent is saveable; native permission state remains product-owned.
 The shared QR-image secondary button stays available without camera access. See `docs/companion_ui.md` for the
 permission state boundary and remaining physical checks.
+
+## Capture-readiness notice
+
+The shared capture notice uses a themed modal bottom sheet with the Companion heading/action
+components, standard accessible modal/drag/back/scrim behavior, native insets and scrollable
+short-screen content. Stopped capture offers Check again/Not now; a running VPN with paused recording
+offers Got it. Existing presentation state/actions own recheck, busy gating and automatic closure when
+capture starts. See `docs/companion_capture_readiness.md`.

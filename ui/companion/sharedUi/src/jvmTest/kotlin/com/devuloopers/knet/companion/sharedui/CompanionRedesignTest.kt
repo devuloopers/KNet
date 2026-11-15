@@ -7,6 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
@@ -368,12 +370,13 @@ class CompanionRedesignTest {
         }
     }
 
-    @Test fun stoppedDesktopShowsStartCaptureDialogAndRecheckAction() = onUi {
+    @Test fun stoppedDesktopShowsBottomSheetAndRecheckAction() = onUi {
         fixture(ready().copy(desktopCaptureStatus = CompanionDesktopCaptureState.STOPPED,
             desktopCaptureNotice = CompanionDesktopCaptureState.STOPPED, captureNoticeFromPreflight = true)) { ui ->
             assertTrue("Start capture in KNet" in ui.labels())
             assertTrue(ui.labels().any { "Office Mac" in it && "Start Capture" in it })
-            ui.assertButton("Check again"); ui.click("Check again")
+            ui.assertBottomSheet("Start capture in KNet")
+            ui.assertButton("Check again"); ui.assertButton("Not now"); ui.click("Check again")
             assertEquals(listOf<CompanionAction>(CompanionAction.RecheckDesktopCaptureRequested), ui.actions)
             ui.save("capture-stopped")
         }
@@ -382,11 +385,80 @@ class CompanionRedesignTest {
         fixture(ready().copy(inspection = CompanionInspectionState.Running(CompanionInspectionMode.DEVICE_VPN, 1000, true),
             desktopCaptureStatus = CompanionDesktopCaptureState.PAUSED, desktopCaptureNotice = CompanionDesktopCaptureState.PAUSED)) { ui ->
             assertTrue("Desktop capture is not recording" in ui.labels())
+            ui.assertBottomSheet("Desktop capture is not recording")
+            assertFalse("Check again" in ui.labels()); assertFalse("Not now" in ui.labels())
             assertTrue(ui.labels().any { "without recording" in it })
+            ui.save("capture-paused")
             ui.click("Got it")
             assertEquals(listOf<CompanionAction>(CompanionAction.CaptureNoticeDismissed), ui.actions)
             ui.state.value = ui.state.value.copy(desktopCaptureNotice = null, desktopCaptureStatus = CompanionDesktopCaptureState.CAPTURING)
             ui.frame(); assertFalse("Desktop capture is not recording" in ui.labels())
+        }
+    }
+
+    @Test fun stoppedCaptureCanBeDeferredAndUsesTheSelectedDesktopName() = onUi {
+        fixture(ready().copy(activeRegistration = other, desktopCaptureStatus = CompanionDesktopCaptureState.STOPPED,
+            desktopCaptureNotice = CompanionDesktopCaptureState.STOPPED)) { ui ->
+            assertTrue(ui.labels().any { "Personal MacBook" in it && "Start Capture" in it })
+            assertFalse(ui.labels().any { "Office Mac" in it && "Start Capture" in it })
+            ui.click("Not now")
+            assertEquals(listOf<CompanionAction>(CompanionAction.CaptureNoticeDismissed), ui.actions)
+            ui.state.value = ui.state.value.copy(desktopCaptureNotice = null)
+            ui.frame(); assertFalse("Start capture in KNet" in ui.labels())
+        }
+    }
+
+    @Test fun captureSheetSupportsStandardDismissActionAndScrimTap() = onUi {
+        for (useScrim in listOf(false, true)) fixture(ready().copy(
+            desktopCaptureStatus = CompanionDesktopCaptureState.STOPPED,
+            desktopCaptureNotice = CompanionDesktopCaptureState.STOPPED,
+        )) { ui ->
+            ui.assertBottomSheet("Start capture in KNet")
+            if (useScrim) ui.tapAt(Offset(ui.width / 2f, 1f)) else ui.dismissSheet()
+            assertEquals(listOf<CompanionAction>(CompanionAction.CaptureNoticeDismissed), ui.actions)
+            ui.state.value = ui.state.value.copy(desktopCaptureNotice = null)
+            ui.frame(); assertFalse("Start capture in KNet" in ui.labels())
+        }
+    }
+
+    @Test fun captureRecheckShowsProgressBlocksRepeatedTapsAndClosesWhenRecordingStarts() = onUi {
+        fixture(ready().copy(operationInProgress = true,
+            desktopCaptureStatus = CompanionDesktopCaptureState.STOPPED,
+            desktopCaptureNotice = CompanionDesktopCaptureState.STOPPED,
+        )) { ui ->
+            ui.assertDisabled("Check again"); ui.assertDisabled("Not now")
+            assertTrue(ui.progressCount() > 0)
+            repeat(2) { ui.tap("Check again"); ui.tap("Not now") }
+            assertTrue(ui.actions.isEmpty())
+            ui.state.value = ui.state.value.copy(operationInProgress = false)
+            ui.frame(); ui.click("Check again")
+            assertEquals(listOf<CompanionAction>(CompanionAction.RecheckDesktopCaptureRequested), ui.actions)
+            ui.state.value = ui.state.value.copy(desktopCaptureNotice = null, desktopCaptureStatus = CompanionDesktopCaptureState.CAPTURING)
+            ui.frame(); assertFalse("Start capture in KNet" in ui.labels())
+        }
+    }
+
+    @Test fun captureSheetActionsRemainReachableOnShortScreensWithLargeTextOnBothPlatforms() = onUi {
+        for (platform in CertificateInstallationPlatform.entries) for (running in listOf(false, true)) fixture(
+            ready().copy(
+                inspection = if (running) CompanionInspectionState.Running(CompanionInspectionMode.DEVICE_VPN, 1000, true) else CompanionInspectionState.Stopped,
+                desktopCaptureStatus = if (running) CompanionDesktopCaptureState.PAUSED else CompanionDesktopCaptureState.STOPPED,
+                desktopCaptureNotice = if (running) CompanionDesktopCaptureState.PAUSED else CompanionDesktopCaptureState.STOPPED,
+            ), width = 320, height = 480, scale = 1.5f, platform = platform,
+        ) { ui ->
+            for (label in if (running) listOf("Got it") else listOf("Check again", "Not now")) {
+                ui.reveal(label); ui.assertVisible(label); ui.assertButton(label)
+            }
+            ui.save("capture-${if (running) "paused" else "stopped"}-${platform.name.lowercase()}-large")
+        }
+    }
+
+    @Test fun captureNoticeDoesNotStackOverDesktopManagementOrVpnConsent() = onUi {
+        val pending = ready().copy(desktopCaptureStatus = CompanionDesktopCaptureState.STOPPED,
+            desktopCaptureNotice = CompanionDesktopCaptureState.STOPPED)
+        for (state in listOf(pending.copy(desktopManagement = CompanionDesktopManagementState.Listing),
+            pending.copy(inspectionPermissionRequired = true))) fixture(state) { ui ->
+            assertFalse("Start capture in KNet" in ui.labels())
         }
     }
 
@@ -452,6 +524,33 @@ class CompanionRedesignTest {
         fun assertButton(label: String) {
             assertTrue(nodes().any { node -> node.config.getOrNull(SemanticsProperties.Role) == Role.Button &&
                 descendants(node).any { it.config.getOrNull(SemanticsProperties.Text).orEmpty().any { text -> text.text == label } } })
+        }
+        fun assertBottomSheet(title: String) {
+            val pane = nodes().first { node ->
+                node.config.getOrNull(SemanticsProperties.PaneTitle) != null && descendants(node).any { child ->
+                    child.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == title }
+                }
+            }
+            val bounds = Rect(pane.positionInWindow, pane.size.toSize())
+            assertTrue(kotlin.math.abs(bounds.bottom - height) <= 1f, "Capture sheet must be bottom anchored: $bounds / $height")
+            assertTrue(bounds.top > 0f, "This content-sized sheet should leave a scrim above it: $bounds")
+            assertTrue(nodes().any { it.config.getOrNull(SemanticsActions.Dismiss)?.action != null }, "The sheet must expose standard drag-handle dismissal")
+        }
+        fun assertDisabled(label: String) {
+            assertTrue(nodes().any { node -> node.config.contains(SemanticsProperties.Disabled) && descendants(node).any {
+                it.config.getOrNull(SemanticsProperties.Text).orEmpty().any { text -> text.text == label }
+            } }, "$label must be disabled during recheck")
+        }
+        fun tap(label: String) = tapAt(boundsForLabel(label).center)
+        fun tapAt(point: Offset) {
+            scene.sendPointerEvent(PointerEventType.Press, point, buttons = PointerButtons(isPrimaryPressed = true), button = PointerButton.Primary)
+            scene.sendPointerEvent(PointerEventType.Release, point, button = PointerButton.Primary)
+            frame()
+        }
+        fun dismissSheet() {
+            assertTrue(assertNotNull(nodes().first { it.config.getOrNull(SemanticsActions.Dismiss)?.action != null }
+                .config.getOrNull(SemanticsActions.Dismiss)?.action).invoke())
+            frame()
         }
         fun progressCount() = nodes().count { it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo) != null }
         fun assertNotActionable(label: String) {

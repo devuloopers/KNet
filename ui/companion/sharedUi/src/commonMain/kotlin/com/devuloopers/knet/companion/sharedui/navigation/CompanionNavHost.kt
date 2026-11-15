@@ -99,5 +99,5 @@ internal fun CompanionNavHost(
         state.desktopManagement == CompanionDesktopManagementState.Closed
     ) CompanionVpnConsentSheet(state, onAction)
     if (!handoff && !adding && !state.inspectionPermissionRequired &&
-        state.desktopManagement == CompanionDesktopManagementState.Closed) CompanionCaptureNoticeDialog(state, onAction)
+        state.desktopManagement == CompanionDesktopManagementState.Closed) CompanionCaptureNoticeSheet(state, onAction)
 }

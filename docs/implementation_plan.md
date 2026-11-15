@@ -1,5 +1,21 @@
 # KNet Implementation Plan
 
+## Companion capture-readiness bottom sheet (2026-11-15) [COMPLETED]
+
+Replace the centered capture notice with the Companion's themed modal bottom-sheet presentation.
+Reuse the existing capture status and actions for stopped and paused recording, show the selected
+desktop's instructions, provide Check again/Not now or Got it, and retain automatic closure and
+prompt deduplication. Keep actions touch-sized, expose standard sheet dismissal and scroll guidance
+on short/larger-text screens. Verify common UI interactions, presentation state, Android packaging
+and shared iOS compilation.
+
+All **116 shared UI/presentation cases** passed with zero failures/errors/skips. Rendered checks cover
+bottom anchoring, stopped/paused actions, selected-desktop copy, standard dismissal/scrim taps,
+loading/duplicate-tap prevention, automatic closure, modal priority and short/larger-text layouts for
+both platform projections. Architecture validation, Android debug assembly and shared iOS device/
+simulator compilation passed. The APK contains the new sheet and no legacy capture-dialog class.
+Evidence: `/Users/devuloopers/.codex/verification/knet-companion-capture-sheet-2026-11-15/`.
+
 ## Content-sized Copy button spacing (2026-11-15) [COMPLETED]
 
 Remove the hidden longest-label reservation from the shared split Copy control. Size the primary
