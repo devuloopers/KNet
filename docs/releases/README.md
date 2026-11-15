@@ -12,6 +12,9 @@ checkouts. Before staging packages, the workflow checks that the remote tag stil
 commit. Release creation always produces a draft; retries may update only existing drafts.
 Published releases are never overwritten by these workflows.
 
+Checksum generation excludes `SHA256SUMS` itself and immediately checks every package entry before
+uploading the manifest. A successful draft build therefore cannot retain an invalid self-checksum.
+
 Expected payloads, excluding artifact attestations managed separately by GitHub:
 
 - Desktop: 13 packages and `SHA256SUMS` covering all 13 files. These are macOS arm64/x64 DMG and
@@ -46,3 +49,13 @@ Set the Companion release to `--latest=false`, then publish Desktop with `--late
 single Latest marker identifies the desktop download. Verify both public release pages and assets.
 Public release publication requires the maintainer's authorization; the coordinated 0.2.0 release
 cycle was explicitly authorized in the active task.
+
+## Native qualification diagnostics
+
+JVM test failures retain full assertion/cause text in hosted logs. Protocol and desktop CI jobs upload
+JUnit reports plus JVM native-crash logs even after a failed gate. Release qualification retains the same
+evidence. These diagnostics do not bypass qualification or include signing credentials.
+
+SQLite is pinned to 2.6.2 with Room 2.8.4: the 2.7.0 and 2.7.1 JVM bundles omit the Intel macOS native
+library. `BundledSqliteDistributionTest` checks all five shipped desktop native resources and executes a
+statement using the current host driver; database migration tests exercise schema compatibility.

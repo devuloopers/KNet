@@ -65,6 +65,18 @@ jobs:
           --no-daemon
           --stacktrace
 
+      - name: Retain protocol failure evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: protocol-test-results
+          path: |
+            **/build/test-results/**/TEST-*.xml
+            **/build/reports/tests/**
+            **/hs_err_pid*.log
+          if-no-files-found: warn
+          retention-days: 14
+
   network-protection:
     name: Network Conditions and Protected Traffic
     runs-on: ubuntu-24.04
@@ -178,6 +190,18 @@ jobs:
           --no-daemon
           --stacktrace
 
+      - name: Retain desktop test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: desktop-test-results-${{ matrix.runner }}
+          path: |
+            **/build/test-results/**/TEST-*.xml
+            **/build/reports/tests/**
+            **/hs_err_pid*.log
+          if-no-files-found: warn
+          retention-days: 14
+
   android-companion:
     name: Android companion
     runs-on: ubuntu-24.04
@@ -205,6 +229,19 @@ jobs:
 
       - name: Qualify Android companion
         run: ./gradlew companionAndroidProductQualification --no-daemon --stacktrace
+
+
+      - name: Retain Companion test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: android-companion-test-results
+          path: |
+            **/build/test-results/**/TEST-*.xml
+            **/build/reports/tests/**
+            **/hs_err_pid*.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload debug APK
         if: github.event_name != 'pull_request'

@@ -312,7 +312,8 @@ class ProxyCapacityBaselineTest {
 
         assertTrue(
             failures.isEmpty(),
-            failures.joinToString(separator = "\n\n") { failure -> failure.stackTraceToString() },
+            failures.joinToString(separator = "\n\n") { failure -> failure.stackTraceToString() } +
+                "\nOrigin completed=${origin.completedResponses.get()} failures=${origin.failures}",
         )
         assertTrue(origin.failures.isEmpty(), origin.failures.joinToString { failure -> failure.toString() })
         assertEquals(CONCURRENT_STREAMING_CLIENTS.toLong(), origin.completedResponses.get())
@@ -497,12 +498,12 @@ class ProxyCapacityBaselineTest {
                 contentLength = header.substringAfter(':').trim().toLong()
             }
         }
-        require(contentLength == expectedBodyBytes)
+        require(contentLength == expectedBodyBytes) { "Expected $expectedBodyBytes response bytes, advertised $contentLength." }
         val chunk = ByteArray(STREAMING_CHUNK_BYTES)
         var received = 0L
         while (received < contentLength) {
             val count = input.read(chunk, 0, minOf(chunk.size.toLong(), contentLength - received).toInt())
-            require(count >= 0)
+            require(count >= 0) { "Streaming response ended at $received of $contentLength bytes." }
             received += count
         }
         received

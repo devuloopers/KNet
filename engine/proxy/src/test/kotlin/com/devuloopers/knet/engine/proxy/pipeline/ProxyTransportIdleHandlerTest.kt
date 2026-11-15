@@ -9,7 +9,7 @@ import io.netty.util.ReferenceCountUtil
 import java.util.concurrent.TimeUnit
 import kotlin.test.*
 
-/** Real timer tests for silent sockets, one-way progress and bounded local/peer pause ownership. */
+/** Netty timer tests use the embedded event-loop clock so host scheduling cannot invent idle intervals. */
 class ProxyTransportIdleHandlerTest {
     @Test fun `a genuinely silent connection still times out`() {
         val errors = mutableListOf<Throwable>()
@@ -28,7 +28,7 @@ class ProxyTransportIdleHandlerTest {
             repeat(5) {
                 channel.writeOutbound(Unpooled.wrappedBuffer(byteArrayOf(1)))
                 ReferenceCountUtil.release(channel.readOutbound<Any>())
-                Thread.sleep(35)
+                channel.advanceTimeBy(35, TimeUnit.MILLISECONDS)
                 channel.runScheduledPendingTasks()
                 assertTrue(channel.isActive)
             }
@@ -72,7 +72,7 @@ class ProxyTransportIdleHandlerTest {
         val channel = channel(errors)
         val hold = ProxyTransportActivity.hold(channel)
         try {
-            Thread.sleep(150)
+            channel.advanceTimeBy(150, TimeUnit.MILLISECONDS)
             hold.close()
             // The old deadline has expired, but the final queued upload has only just been released.
             channel.runScheduledPendingTasks()
@@ -83,15 +83,17 @@ class ProxyTransportIdleHandlerTest {
         } finally { hold.close(); channel.finishAndReleaseAll() }
     }
 
-    private fun channel(errors: MutableList<Throwable>): EmbeddedChannel = EmbeddedChannel(
-        ProxyTransportIdleHandler(100, TimeUnit.MILLISECONDS),
-        object : ChannelInboundHandlerAdapter() {
-            override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) { errors += cause }
-        },
-    )
+    private fun channel(errors: MutableList<Throwable>): EmbeddedChannel = EmbeddedChannel().apply {
+        // Freeze before handlerAdded captures its ticker and initial deadline.
+        freezeTime()
+        pipeline().addLast(ProxyTransportIdleHandler(100, TimeUnit.MILLISECONDS),
+            object : ChannelInboundHandlerAdapter() {
+                override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) { errors += cause }
+            })
+    }
 
     private fun tick(channel: EmbeddedChannel) {
-        Thread.sleep(150)
+        channel.advanceTimeBy(150, TimeUnit.MILLISECONDS)
         channel.runScheduledPendingTasks()
     }
 }

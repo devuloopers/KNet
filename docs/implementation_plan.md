@@ -12,6 +12,18 @@ Preparation passed local architecture verification, actionlint and eight synthet
 checks covering first creation, draft updates, published-release protection and changed-tag rejection.
 Product qualification, hosted native packaging and final publication remain in progress.
 
+The first hosted cycle exposed an isolated dependency-resolution failure before compilation. A
+release audit also reproduced the existing checksum-manifest self-inclusion bug; both workflows now
+exclude the manifest from its input and verify generated checksums before staging release assets.
+
+Hosted qualification also exposed Companion Home control movement, an absent Intel macOS SQLite native
+payload, a wall-clock-dependent transport timer test, a concurrent-response truncation and a Linux x64
+native font crash. Home now reserves measured localized heading/footer height, SQLite is pinned to the
+compatible complete 2.6.2 native bundle, and timer tests advance Netty's frozen event-loop clock. The full
+local Companion UI suite, eight native-driver/migration cases and Linux ARM64's 214 Traffic tests pass.
+Transport concurrency and Linux x64 investigation continue; hosted failure artifacts now retain assertion
+causes and native-crash diagnostics. Publication remains blocked until all required gates pass.
+
 ## Desktop website preview viewport fit (2026-11-15) [COMPLETED]
 
 Account for desktop browser height as well as width so the full product image is visible on initial

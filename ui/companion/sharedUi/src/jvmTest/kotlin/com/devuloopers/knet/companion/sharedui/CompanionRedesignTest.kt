@@ -233,9 +233,10 @@ class CompanionRedesignTest {
 
     @Test
     fun homeRuntimeStatesShareStableStatusRowsAndTruthfulActions() = onUi {
-        fixture(ready()) { ui ->
+        for ((width, scale) in listOf(420 to 1f, 375 to 1f, 420 to 1.25f)) fixture(ready(), width = width, scale = scale) { ui ->
             ui.assertVisible("Start inspection")
             val original = ui.boundsForLabel("Start inspection")
+            val readyFootnote = ui.boundsForLabel("Start inspection to route traffic through your desktop.")
             ui.click("Start inspection")
             assertEquals(CompanionAction.StartInspectionRequested, ui.actions.last())
             ui.save("ready")
@@ -243,7 +244,9 @@ class CompanionRedesignTest {
             ui.frame()
             assertTrue("Inspection is running" in ui.labels())
             ui.assertVisible("Stop inspection")
-            assertEquals(original.top, ui.boundsForLabel("Stop inspection").top)
+            assertEquals(original.top, ui.boundsForLabel("Stop inspection").top,
+                "Primary control moved at width=$width / fontScale=$scale; ready footnote=$readyFootnote, " +
+                    "active footnote=${ui.boundsForLabel("Stop inspection anytime from Companion.")}")
             ui.click("Stop inspection")
             assertEquals(CompanionAction.StopInspectionRequested, ui.actions.last())
             ui.save("running")

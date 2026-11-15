@@ -17,13 +17,7 @@ internal fun CompanionHomeScreen(state: CompanionHomeUiState, onAction: (Compani
         CompanionHomeHero(state)
         CompanionInspectionControl(state, onAction)
         CompanionReadinessSummary(state)
-        CompanionFootnote(stringResource(when {
-            state.readiness == CompanionHomeReadiness.UNAVAILABLE -> Res.string.home_auto_checking
-            state.inspectionControl == CompanionHomeInspectionControl.Stop -> Res.string.home_active_note
-            state.inspectionControl == CompanionHomeInspectionControl.Starting ||
-                state.inspectionControl == CompanionHomeInspectionControl.Stopping -> Res.string.home_inspection_busy_summary
-            else -> Res.string.home_ready_note
-        }))
+        CompanionHomeFootnote(state)
         state.failureNotice?.let { notice ->
             CompanionPanel {
                 CompanionInfo(notice.failure.message, KNetIcons.Warning, KNetTheme.colors.semantic.warning)

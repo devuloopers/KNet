@@ -593,6 +593,13 @@ plugins {
     alias(libs.plugins.kotlinSerialization) apply false
 }
 
+// Preserve assertion messages and causes in hosted logs, including native-loader failures.
+subprojects {
+    tasks.withType<Test>().configureEach {
+        testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
 val allowedArchitectureDependencies = mapOf(
     ":application:desktop" to setOf(
         ":core:traffic",

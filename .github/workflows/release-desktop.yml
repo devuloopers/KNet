@@ -116,6 +116,7 @@ jobs:
           path: |
             **/build/test-results/**/TEST-*.xml
             **/build/reports/tests/**
+            **/hs_err_pid*.log
             docs/qualification/network_protection_cases.tsv
             build/reports/network-protection/**
             engine/simulator/build/reports/network-protection-load/**
@@ -365,7 +366,8 @@ jobs:
           fi
           (
             cd release-dist
-            find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+            find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+            sha256sum --check SHA256SUMS
           )
           ls -la release-dist
 

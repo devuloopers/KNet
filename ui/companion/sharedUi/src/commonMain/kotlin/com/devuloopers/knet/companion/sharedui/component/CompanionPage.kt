@@ -22,6 +22,9 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 /** Space available to the hero after native insets and persistent chrome, including large text. */
 internal val LocalCompanionCompactBody = staticCompositionLocalOf { false }
 
+/** Shared title-to-summary gap, also used when reserving measured runtime heading space. */
+internal val CompanionHeadingGap = 10.dp
+
 /** Instruction page: scrollable guidance and a separate, reachable native Settings/Continue action. */
 @Composable
 internal fun CompanionPage(
@@ -60,7 +63,7 @@ internal fun CompanionHeroPage(content: @Composable ColumnScope.() -> Unit) {
 /** Consistent mobile title and explanatory copy. */
 @Composable
 internal fun CompanionHeading(title: String, summary: String? = null, centered: Boolean = false) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(CompanionHeadingGap)) {
         Text(title, Modifier.fillMaxWidth(), style = KNetTheme.typography.hero,
             color = KNetTheme.colors.textPrimary, textAlign = if (centered) TextAlign.Center else TextAlign.Start)
         if (!summary.isNullOrBlank()) Text(summary, Modifier.fillMaxWidth(), style = KNetTheme.typography.bodyLarge,

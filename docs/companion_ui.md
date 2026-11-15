@@ -14,7 +14,11 @@ handoff state own its symbol, text, enabled policy and progress. Pairing/startin
 be tapped. Start uses the KNet blue ring; verified/running states use restrained green. A connected transport alone
 does not label inspection Active. Progress draws only while composed, with static arcs when KNet motion is disabled.
 `CompanionHeroPage`, `CompanionPage`, `CompanionHeading`, `CompanionPanel` and status rows share spacing and mobile
-typography across Android/iOS. System camera, certificate installation and VPN prompts remain native.
+typography across Android/iOS. Home measures the localized heading and footnote variants at the current
+width, density and font scale, reserving their largest wrapped height. Status transitions therefore keep the
+centered primary control fixed without composing hidden alternative text. Regression tests assert stable
+positions at 375px and 420px widths and at 125% font scale. System camera, certificate installation and VPN
+prompts remain native.
 
 ## Screen coverage
 
