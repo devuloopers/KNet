@@ -1,5 +1,17 @@
 # KNet Implementation Plan
 
+## Coordinated Desktop and Companion 0.2.0 release (2026-11-15) [IN PROGRESS]
+
+Align product version defaults, restore CI on `master`, and stage both product releases as drafts
+from immutable build revisions. Run the qualification/package workflows, investigate failures and
+commit fixes until both pass. New unpublished release tags may advance together during preparation;
+published tags remain unchanged. Verify all expected packages, checksums and Android signing before
+publishing Desktop and Companion 0.2.0, then record the final commit and workflow/release evidence.
+
+Preparation passed local architecture verification, actionlint and eight synthetic draft-publication
+checks covering first creation, draft updates, published-release protection and changed-tag rejection.
+Product qualification, hosted native packaging and final publication remain in progress.
+
 ## Desktop website preview viewport fit (2026-11-15) [COMPLETED]
 
 Account for desktop browser height as well as width so the full product image is visible on initial

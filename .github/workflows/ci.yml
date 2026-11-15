@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [main]
+    branches: [master]
 
 permissions:
   contents: read
@@ -59,8 +59,8 @@ jobs:
           ./gradlew
           http2Qualification
           grpcQualification
-          websocketQualification
-          graphqlWebSocketQualification
+          webSocketQualification
+          graphQLWebSocketQualification
           sseQualification
           --no-daemon
           --stacktrace

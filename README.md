@@ -395,18 +395,22 @@ release remains unchanged; subsequent releases use product-qualified tags:
 
 ```bash
 # Desktop release
-git tag desktop-v0.1.5
-git push origin desktop-v0.1.5
+git tag -a desktop-v0.2.0 -m 'KNet Desktop 0.2.0'
+git push origin desktop-v0.2.0
 
 # Android/iOS companion release
-git tag companion-v0.1.5
-git push origin companion-v0.1.5
+git tag -a companion-v0.2.0 -m 'KNet Companion 0.2.0'
+git push origin companion-v0.2.0
 ```
 
 `desktop-v*` runs the desktop qualification and packaging workflow. `companion-v*` runs Android packaging and iOS
 source qualification. The tag supplies the product's public version; CI derives monotonic Android `versionCode`
 and iOS `CURRENT_PROJECT_VERSION` values from its three numeric components. Local development defaults are
 maintained independently as `knet.desktop.version` and `knet.companion.version` in `gradle.properties`.
+
+Both workflows stage unpublished drafts after qualification and packaging. Review the assets and
+checksums before publishing; automated retries refuse to overwrite an already published release.
+See the [release preparation guide](docs/releases/README.md) for verification and coordinated retries.
 
 The README keeps separate [Desktop release](https://github.com/devuloopers/KNet/releases?q=desktop-v) and
 [Companion release](https://github.com/devuloopers/KNet/releases?q=companion-v) links because GitHub's **Latest**
