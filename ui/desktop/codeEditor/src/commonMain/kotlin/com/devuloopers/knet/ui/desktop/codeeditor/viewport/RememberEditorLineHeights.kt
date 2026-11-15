@@ -2,10 +2,11 @@ package com.devuloopers.knet.ui.desktop.codeeditor.viewport
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.TextUnit
 import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorDocumentSnapshot
@@ -22,7 +23,9 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /**
- * Measures wrapped geometry off the UI thread, releasing every paragraph after measuring it.
+ * Measures wrapped geometry off the UI thread with a job-owned font resolver and cacheless measurer.
+ * The screen's resolver must never cross into the worker: its native font collection is also used
+ * by UI rendering and can outlive cancellation briefly while a native measurement returns.
  * Geometry resets for document/width/font/fold changes; a syntax-only refresh waits for an active thumb
  * gesture to finish. Cacheless measurement avoids retaining a second copy of the document's layouts.
  */
@@ -39,19 +42,22 @@ internal fun rememberEditorLineHeights(
     isScrollbarDragged: Boolean,
 ): EditorLineHeightIndex? {
     val density = LocalDensity.current
-    val measurer = rememberTextMeasurer(cacheSize = 0)
+    val layoutDirection = LocalLayoutDirection.current
     val style = remember(fontSize, lineHeight) {
         CodeEditorTokens.editorTextStyle(fontSize, lineHeight).copy(fontFamily = FontFamily.Monospace)
     }
     val minimumHeight = with(density) { CodeEditorTokens.GutterLineHeightDp.roundToPx() }
-    var heights by remember(snapshot, geometryMap, textWidth, wordWrap, style, density) {
+    var heights by remember(snapshot, geometryMap, textWidth, wordWrap, style, density, layoutDirection) {
         mutableStateOf<EditorLineHeightIndex?>(null)
     }
     val dragging by rememberUpdatedState(isScrollbarDragged)
-    LaunchedEffect(snapshot, geometryMap, textWidth, wordWrap, style, density, measurer, tokenizedDocument) {
+    LaunchedEffect(snapshot, geometryMap, textWidth, wordWrap, style, density, layoutDirection, tokenizedDocument) {
         if (textWidth <= 0) return@LaunchedEffect
         val prepared = withContext(Dispatchers.Default) {
             val context = currentCoroutineContext()
+            // Create per job, inside the worker. A cancelled native call may still be returning
+            // when the next width/document job begins; neither job may share its font collection.
+            val measurer = TextMeasurer(createFontFamilyResolver(), density, layoutDirection, cacheSize = 0)
             val singleLineHeight = if (wordWrap) {
                 measurer.measure("M", style = style).size.height.coerceAtLeast(minimumHeight)
             } else minimumHeight

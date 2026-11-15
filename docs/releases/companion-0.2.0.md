@@ -10,6 +10,8 @@
 - Recover the control session after Desktop restarts while the VPN remains connected.
 - Show capture-readiness guidance in a bottom sheet when Desktop recording is stopped or paused.
 - Improve VPN shutdown and reconnect handling.
+- Keep Home's primary control stable across readiness and connection status changes, including
+  narrow layouts and larger text.
 
 ### Compatibility and scope
 

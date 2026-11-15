@@ -478,6 +478,9 @@ class ProxyCapacityBaselineTest {
         originPort: Int,
         expectedBodyBytes: Long,
     ): Long = Socket().use { client ->
+        // Bound the fixture's kernel buffers as well as its heap. One hundred autotuned loopback
+        // sockets otherwise exhaust macOS mbufs at the origin before the proxy can drain them.
+        client.receiveBufferSize = STREAMING_CHUNK_BYTES
         client.connect(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, proxyPort), 5_000)
         client.soTimeout = STREAMING_TIMEOUT_MILLIS.toInt()
         val authority = "${KNetProxyServer.DEFAULT_BIND_HOST}:$originPort"
@@ -773,6 +776,7 @@ class ProxyCapacityBaselineTest {
         private fun respond(connection: Socket) {
             try {
                 connection.use { socket ->
+                    socket.sendBufferSize = STREAMING_CHUNK_BYTES
                     val input = BufferedInputStream(socket.getInputStream())
                     while (readAsciiLine(input).isNotEmpty()) {
                         // Drain the request head before generating the response.

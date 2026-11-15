@@ -89,6 +89,7 @@ jobs:
         run: >-
           ./gradlew
           verifyArchitectureFoundation
+          :ui:desktop:codeEditor:jvmTest
           http2Qualification
           grpcQualification
           webSocketQualification

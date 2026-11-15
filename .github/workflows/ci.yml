@@ -57,6 +57,7 @@ jobs:
       - name: Run protocol gates
         run: >-
           ./gradlew
+          :ui:desktop:codeEditor:jvmTest
           http2Qualification
           grpcQualification
           webSocketQualification

@@ -15,6 +15,8 @@
 - Use smart/manual traffic scrolling, unseen-request tracking and updated shared controls.
 - Improve connection cleanup, tunnel lifecycle/closure diagnostics, large-body scrolling and
   stability while switching selected traffic.
+- Restore the bundled database runtime on Intel Macs, isolate background editor font resources and
+  safely clean up upstream candidates that fail before socket registration.
 
 ### Compatibility and scope
 

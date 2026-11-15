@@ -131,7 +131,7 @@ internal class HappyEyeballsDialer(
         private fun onAttemptCompleted(future: ChannelFuture, candidate: UpstreamAddressCandidate) {
             activeAttempts.remove(future)
             if (result.isDone) {
-                future.channel().close()
+                closeCandidate(future.channel())
                 return
             }
             if (future.isSuccess) {
@@ -142,15 +142,15 @@ internal class HappyEyeballsDialer(
                 if (result.complete(ConnectedUpstream(future.channel(), candidate))) {
                     staggeredAttempt?.cancel(false)
                     deadline?.cancel(false)
-                    activeAttempts.keys.forEach { losingFuture -> losingFuture.channel().close() }
+                    activeAttempts.keys.forEach { losingFuture -> closeCandidate(losingFuture.channel()) }
                     activeAttempts.clear()
                 } else {
-                    future.channel().close()
+                    closeCandidate(future.channel())
                 }
                 return
             }
 
-            future.channel().close()
+            closeCandidate(future.channel())
             recordFailure(candidate, future.cause().safeDiagnostic())
             if (nextCandidateIndex < route.candidates.size) {
                 staggeredAttempt?.cancel(false)
@@ -190,7 +190,7 @@ internal class HappyEyeballsDialer(
         private fun cancelRace() {
             staggeredAttempt?.cancel(false)
             deadline?.cancel(false)
-            activeAttempts.keys.forEach { future -> future.channel().close() }
+            activeAttempts.keys.forEach { future -> closeCandidate(future.channel()) }
             activeAttempts.clear()
         }
 
@@ -200,6 +200,15 @@ internal class HappyEyeballsDialer(
                 "${failure.family.name} ${failure.address}: ${failure.detail}"
             }
             .ifBlank { "no connection attempt completed" }
+    }
+
+    /**
+     * Disposes a candidate even when registration failed before it received an event loop.
+     * Race cleanup is serialized on the owner loop; failed registration has no channel executor
+     * through which `Channel.close()` can create its promise, so Netty's transport close is required.
+     */
+    private fun closeCandidate(channel: Channel) {
+        if (channel.isRegistered) channel.close() else channel.unsafe().closeForcibly()
     }
 
     private fun newBootstrap(eventLoop: EventLoop): Bootstrap = Bootstrap()

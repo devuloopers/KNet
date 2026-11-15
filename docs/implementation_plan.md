@@ -21,8 +21,23 @@ payload, a wall-clock-dependent transport timer test, a concurrent-response trun
 native font crash. Home now reserves measured localized heading/footer height, SQLite is pinned to the
 compatible complete 2.6.2 native bundle, and timer tests advance Netty's frozen event-loop clock. The full
 local Companion UI suite, eight native-driver/migration cases and Linux ARM64's 214 Traffic tests pass.
-Transport concurrency and Linux x64 investigation continue; hosted failure artifacts now retain assertion
-causes and native-crash diagnostics. Publication remains blocked until all required gates pass.
+The full Traffic suite also passed in a Linux x64 container. Subsequent stress diagnostics identified
+macOS origin-side `No buffer space available` failures: the 100-client fixture now bounds kernel socket
+buffers without reducing concurrency, payload or resource gates. Background editor geometry now owns
+its font resolver per job instead of sharing rendering's native font collection; rapid resize/font-scale/
+disposal regression checks are being qualified. Hosted failure artifacts retain assertion causes and
+native-crash diagnostics. Android and iOS have each passed hosted qualification in their observed runs;
+publication remains blocked until all required gates pass together on the final source revision.
+
+The bounded fixture passed ten consecutive 100-client runs (1,000 exact 10 MiB responses). All 100
+editor and 214 Traffic JVM cases plus architecture verification pass locally. An additional Intel
+registration-failure diagnostic was reproduced deterministically: candidate cleanup attempted a normal
+channel close before an event loop existed. The dialer now closes unregistered candidates through Netty's
+transport cleanup path; the new regression and existing generated-response tests pass. Editor pointer
+fixtures now wait for actual asynchronous geometry readiness rather than a fixed frame delay, and the
+full editor suite is an explicit protocol/release gate. The complete proxy/editor suites pass locally,
+as do all 224 Traffic/editor render cases under Linux x64. Both unpublished tags will advance together
+to the repaired commit for the next complete hosted release cycle; final hosted verification is pending.
 
 ## Desktop website preview viewport fit (2026-11-15) [COMPLETED]
 

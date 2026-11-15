@@ -59,3 +59,13 @@ evidence. These diagnostics do not bypass qualification or include signing crede
 SQLite is pinned to 2.6.2 with Room 2.8.4: the 2.7.0 and 2.7.1 JVM bundles omit the Intel macOS native
 library. `BundledSqliteDistributionTest` checks all five shipped desktop native resources and executes a
 statement using the current host driver; database migration tests exercise schema compatibility.
+
+The proxy capacity fixture caps its Java endpoint socket buffers at 64 KiB. This keeps 100 concurrent
+10 MiB origin responses within macOS kernel mbuf capacity while retaining the full transport workload,
+existing heap/direct-memory limits and exact-byte assertions. Origin-side failures are reported with
+client truncation evidence rather than being mistaken for a proxy timeout.
+
+Failed upstream registration is a terminal candidate result even if the socket never acquired an event
+loop. Happy Eyeballs cleanup uses Netty's direct transport close for that unregistered state, and ordinary
+channel close once registered. A deterministic incompatible-event-loop regression verifies the race
+completes exceptionally without throwing from cleanup or retaining its connection deadline.

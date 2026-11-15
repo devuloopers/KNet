@@ -240,3 +240,15 @@ Delayed syntax/fold metadata cannot replay a stale reveal. Pointer presses, whee
 and selection gestures cancel an in-flight reveal; releasing a manual gesture does not replay it. Selecting the
 whole document continues to preserve the viewport. Request/response bodies and API Studio inherit these rules
 through the same editor, without feature-specific scrolling implementations.
+
+### Native font ownership during wrapped measurement
+
+Background line-height jobs create their own cacheless `TextMeasurer` and independent font resolver
+inside the worker, using captured density and layout direction. They never borrow the composition's
+resolver/native font collection. Cancellation cannot interrupt a native layout call, so a replacement
+job also receives a new resolver rather than sharing one with the retiring job. Geometry publication
+and drag ownership remain on the composition context. Regression coverage combines concurrent visible
+text, twenty rapid width replacements, three font scales and disposal with a replacement in flight.
+
+This avoids concurrent mutation of native font lookup caches by rendering and measurement. The pinned
+Skia generation predates the upstream [FontCollection synchronization change](https://skia.googlesource.com/skia.git/+/3dcd22c1ff0689094193437253efd30c46bfae6a).

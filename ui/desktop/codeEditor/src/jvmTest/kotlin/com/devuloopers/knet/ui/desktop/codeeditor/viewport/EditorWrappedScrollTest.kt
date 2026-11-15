@@ -19,6 +19,7 @@ import java.awt.EventQueue
 import java.io.ByteArrayInputStream
 import java.io.File
 import javax.imageio.ImageIO
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.runBlocking
 import kotlin.test.*
 
@@ -28,6 +29,45 @@ class EditorWrappedScrollTest {
     private var nanos = 0L
     private val source = (0 until 566).joinToString("\n") {
         if (it == 395) "  \"message\": \"" + "large wrapped field with words and Unicode λ ".repeat(1500) + "\"," else "  \"value$it\": $it,"
+    }
+
+    @Test fun `background geometry survives rapid width changes and scene disposal`() {
+        val snapshot = ChunkedEditorDocument((0 until 300).joinToString("\n") {
+            "wrapped Unicode λ field $it " + "wide words ".repeat(60)
+        }).snapshot
+        val geometry = EditorVisualLineMap.build(snapshot.lineCount, emptyList(), emptySet())
+        for (scale in listOf(1f, 1.4f, 1.1f)) {
+            val result = AtomicReference<EditorLineHeightIndex?>()
+            val width = mutableStateOf(180)
+            var scene: ImageComposeScene? = null
+            EventQueue.invokeAndWait {
+                scene = ImageComposeScene(400, 600, Density(1f, scale), content = {
+                    result.set(rememberEditorLineHeights(snapshot, geometry, width.value, true,
+                        CodeEditorTokens.FontSize, CodeEditorTokens.LineHeight, null, CodeEditorSemanticColors(), false))
+                    // Visible text and worker measurement run concurrently, with independent native fonts.
+                    androidx.compose.foundation.text.BasicText("Rendering while wrapping ${width.value} λ",
+                        style = CodeEditorTokens.editorTextStyle(CodeEditorTokens.FontSize, CodeEditorTokens.LineHeight))
+                })
+            }
+            try {
+                repeat(20) { iteration ->
+                    EventQueue.invokeAndWait {
+                        width.value = 150 + iteration * 7
+                        scene!!.render(++nanos * 16_000_000).close()
+                    }
+                }
+                val deadline = System.nanoTime() + 10_000_000_000L
+                do {
+                    EventQueue.invokeAndWait { scene!!.render(++nanos * 16_000_000).close() }
+                    Thread.sleep(10)
+                } while (result.get() == null && System.nanoTime() < deadline)
+                val heights = assertNotNull(result.get(), "Worker must publish current wrapped geometry")
+                assertEquals(snapshot.lineCount, heights.rowCount)
+                assertTrue(heights.totalHeight > heights.baselineHeight * snapshot.lineCount)
+                // Leave a replacement in flight when disposing; cancellation must not touch UI font ownership.
+                EventQueue.invokeAndWait { width.value = 100; scene!!.render(++nanos * 16_000_000).close() }
+            } finally { EventQueue.invokeAndWait { scene!!.close() } }
+        }
     }
 
     @Test fun `drag both ways inside a very tall field remains stable after the pointer stops`() = fixture { f ->
@@ -153,12 +193,18 @@ class EditorWrappedScrollTest {
             return result!!
         }
         fun thumbY(): Float {
-            val image = image()
-            val x = width.value - 4
-            val background = image.getRGB(width.value - 12, 10)
-            val occupied = (1 until image.height - 1).filter { image.getRGB(x, it) != background }
-            assertTrue(occupied.isNotEmpty(), "Geometry and thumb must be ready")
-            return (occupied.first() + occupied.last()) / 2f
+            // Geometry is asynchronous. Await the actual thumb rather than assuming that a fixed
+            // number of 15 ms frames also completes paragraph work on a slower/emulated host.
+            val deadline = System.nanoTime() + 5_000_000_000L
+            while (true) {
+                val image = image()
+                val x = width.value - 4
+                val background = image.getRGB(width.value - 12, 10)
+                val occupied = (1 until image.height - 1).filter { image.getRGB(x, it) != background }
+                if (occupied.isNotEmpty()) return (occupied.first() + occupied.last()) / 2f
+                assertTrue(System.nanoTime() < deadline, "Geometry and thumb must be ready")
+                frames(1)
+            }
         }
         fun drag(from: Float, to: Float, release: Boolean = true) {
             edt {

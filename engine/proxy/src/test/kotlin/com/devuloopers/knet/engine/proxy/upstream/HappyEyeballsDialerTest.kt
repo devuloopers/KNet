@@ -2,6 +2,7 @@ package com.devuloopers.knet.engine.proxy.upstream
 
 import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.channel.embedded.EmbeddedChannel
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -13,6 +14,20 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class HappyEyeballsDialerTest {
+
+    @Test
+    fun `registration failure completes the race without closing through a missing event loop`() {
+        val owner = EmbeddedChannel()
+        try {
+            // A real NIO socket cannot register on EmbeddedEventLoop. This deterministically
+            // exercises the candidate that fails before AbstractChannel has an assigned loop.
+            val result = HappyEyeballsDialer(testPolicy()).connect(owner.eventLoop(), route(9, listOf("127.0.0.1")))
+            repeat(3) { owner.runPendingTasks(); owner.checkException() }
+            assertTrue(result.isCompletedExceptionally)
+            val failure = assertFailsWith<java.util.concurrent.CompletionException> { result.join() }
+            assertTrue(failure.cause is UpstreamConnectException)
+        } finally { owner.finishAndReleaseAll() }
+    }
 
     @Test
     fun `unreachable ipv6 candidate falls back to reachable ipv4 candidate`() {
