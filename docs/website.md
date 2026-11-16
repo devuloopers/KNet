@@ -99,7 +99,9 @@ The feature section retains an accessible hidden heading. In stacked enhanced pa
 keep screenshot positions stable across different copy lengths; no-script panels remain normal flowing
 sections. Removing the extra heading/card makes room for larger complete captures in short windows.
 Narrow screens stack content. Header actions wrap under magnification; tabs scroll within their own
-row. All screenshots are static examples, including the network graph. No external font, analytics,
+row using touch, trackpad or keyboard. That row hides its native scrollbar and clips vertical overflow;
+the shared page scrollbar is unaffected. All screenshots are static examples, including the network
+graph. No external font, analytics,
 image CDN, application API or control WebSocket is requested by the page.
 
 ## Actual Compose artwork and automatic regeneration

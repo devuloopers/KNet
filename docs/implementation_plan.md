@@ -1,5 +1,15 @@
 # KNet Implementation Plan
 
+## Website feature tab scrollbar (2026-11-16) [COMPLETED]
+
+Hide the native scrollbar in the feature tab row while retaining horizontal touch, trackpad and
+keyboard navigation on narrow screens. Verify overflow containment and tab reachability across engines.
+
+Replaced the explicit thin-scrollbar policy with a hidden native track and WebKit fallback, preserving
+horizontal scrolling and clipping vertical overflow. All nine targeted Chromium/Firefox/WebKit cases
+passed for scrollbar geometry, keyboard reachability/activation and touch navigation. Build/TypeScript,
+formatting and whitespace checks passed.
+
 ## Website feature label cleanup (2026-11-16) [COMPLETED]
 
 Remove the repeated feature label above each tab panel's main title; the tab row already identifies

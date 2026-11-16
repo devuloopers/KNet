@@ -4,6 +4,18 @@ Date: 2026-11-15. Scope: the minimal public website under `products/website`, op
 artwork generation, static production hosting and delivery configuration. No desktop/Companion runtime
 behavior was changed, and no existing app, device, capture database or user traffic was driven/read.
 
+## Feature tab scrollbar (2026-11-16)
+
+Status: [COMPLETED]. The feature row explicitly requested a thin native scrollbar. Its track is now
+hidden through standard CSS and a WebKit fallback, while native horizontal scrolling remains active
+and vertical overflow is clipped. The page scrollbar retains its normal behavior.
+
+All nine targeted Chromium/Firefox/WebKit cases passed: the added case checks desktop/narrow row
+geometry and keyboard scrolling to the last tab; existing cases verify manual activation and touch
+selection without page overflow. Static build/TypeScript, scoped formatting and whitespace validation
+passed. Logs: `/tmp/knet-feature-tab-scrollbar-build.log` and
+`/tmp/knet-feature-tab-scrollbar-browser.log`.
+
 ## Website motion and default Traffic (2026-11-16)
 
 Status: [COMPLETED]. Traffic is now the shared default selection/non-deferred tour image, while valid

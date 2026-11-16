@@ -408,6 +408,49 @@ test("no-script feature links expose all five captures and their descriptions", 
   }
 });
 
+test("feature tabs hide their scrollbar while retaining narrow-screen keyboard navigation", async ({
+  page,
+}) => {
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.goto("/#features");
+    const row = page.getByRole("tablist");
+    const geometry = await row.evaluate((node) => ({
+      verticalOverflow: node.scrollHeight - node.clientHeight,
+      horizontalOverflow: node.scrollWidth - node.clientWidth,
+      scrollbarWidth: getComputedStyle(node).scrollbarWidth,
+      gutter:
+        node.getBoundingClientRect().height -
+        node.clientHeight -
+        parseFloat(getComputedStyle(node).borderBottomWidth),
+    }));
+    expect(geometry.verticalOverflow).toBe(0);
+    expect(geometry.scrollbarWidth).toBe("none");
+    expect(geometry.gutter).toBeLessThanOrEqual(1);
+    if (width === 375) {
+      expect(geometry.horizontalOverflow).toBeGreaterThan(0);
+      await page.getByRole("tab", { name: "Traffic", exact: true }).focus();
+      await page.keyboard.press("End");
+      const last = page.getByRole("tab", {
+        name: "Protected Traffic",
+        exact: true,
+      });
+      await expect(last).toBeFocused();
+      const tabBounds = (await last.boundingBox())!;
+      const rowBounds = (await row.boundingBox())!;
+      expect(tabBounds.x).toBeGreaterThanOrEqual(rowBounds.x - 1);
+      expect(tabBounds.x + tabBounds.width).toBeLessThanOrEqual(
+        rowBounds.x + rowBounds.width + 1,
+      );
+      await page.keyboard.press("Space");
+      await expect(page.getByRole("tabpanel")).toHaveAccessibleName(
+        "Protected Traffic",
+      );
+      expect(await row.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+    } else expect(geometry.horizontalOverflow).toBe(0);
+  }
+});
+
 test("touch selection works at narrow width without page overflow", async ({
   browser,
 }) => {

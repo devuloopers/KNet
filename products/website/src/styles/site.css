@@ -274,9 +274,14 @@ h1 span {
 .feature-tabs {
   gap: 12px;
   overflow-x: auto;
-  scrollbar-width: thin;
+  overflow-y: hidden;
+  scrollbar-width: none;
   padding-top: 0;
   border-bottom: 1px solid var(--border);
+}
+/* Native horizontal scrolling remains available without a visible track on WebKit browsers. */
+.feature-tabs::-webkit-scrollbar {
+  display: none;
 }
 .feature-tabs a {
   position: relative;
