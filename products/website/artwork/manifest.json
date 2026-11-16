@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "toolchain": {
+    "java": "openjdk version \"21.0.8\" 2025-07-15",
+    "kotlin": "2.4.10",
+    "compose": "1.12.10-alpha01+dev4704",
+    "os": "Darwin",
+    "architecture": "arm64"
+  },
+  "sourceCommit": "1f5ce3d5920f967d7028fbd8106124c7e88fb482",
+  "sourceDigest": "4f4512fb2f6ffee430c9a508d515fd7db91ce98ec12804fe910c3c8087347b3c",
+  "renderConfiguration": {
+    "version": 1,
+    "locale": "en-US",
+    "timezone": "UTC",
+    "theme": "KNet dark",
+    "clock": "fixed",
+    "fontScale": 1
+  },
+  "images": [
+    {
+      "id": "traffic",
+      "file": "traffic-preview.png",
+      "width": 1600,
+      "height": 960,
+      "sha256": "46a8b9b934591dc15d8bc863a89b2ec7cc38d4ab01a92a433e497a075a7f64e4"
+    },
+    {
+      "id": "multi-device",
+      "file": "multi-device-preview.png",
+      "width": 1600,
+      "height": 960,
+      "sha256": "93a634dbce7485039d97d74ca01a86f9252343d40e994050499936e708f2d91b"
+    },
+    {
+      "id": "api-studio",
+      "file": "api-studio-preview.png",
+      "width": 1600,
+      "height": 960,
+      "sha256": "914aadc1451151e516bbe95bd42a189bd11465f6d6ae7a9a790c986cd38939b4"
+    },
+    {
+      "id": "intercepts",
+      "file": "intercepts-preview.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "5c842a56fa4e458abd3318cf816c6dfea16e6850ee354c9de3d4350a15a9c60b"
+    },
+    {
+      "id": "network-conditions",
+      "file": "network-conditions-preview.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "b848948259fa2bfb6b0943434746cb9102d1a02b604d74383b4c27861d6d3367"
+    },
+    {
+      "id": "protected-traffic",
+      "file": "protected-traffic-preview.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "415ddb5308f11a910c23f45e2f1ebdf2512f3bfe0db618c98bb59cbdfbd902ee"
+    },
+    {
+      "id": "companion-pairing",
+      "file": "companion-pairing-preview.png",
+      "width": 840,
+      "height": 1680,
+      "sha256": "7507221a51949723f2ab8d6338030261e6c6bdae1ac19447d1904e17b3862353"
+    },
+    {
+      "id": "companion-connected",
+      "file": "companion-connected-preview.png",
+      "width": 840,
+      "height": 1680,
+      "sha256": "d44f18ba9ba07aa055a25c12cf5154fd5570b9d092b00cd94ea243440526000d"
+    }
+  ]
+}

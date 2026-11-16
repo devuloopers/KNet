@@ -10,9 +10,17 @@
   --link: #73adff;
   --button: #2563eb;
   --button-hover: #1d4ed8;
-  --content-width: 1200px;
+  --content-width: 1400px;
+  --site-header-height: 82px;
+  --surface-subtle: #0e151f;
+  --feature-preview-chrome-space: 160px;
+  --feature-preview-min-height: 180px;
   --gutter: clamp(20px, 4vw, 56px);
   --radius: 8px;
+  --motion-fast: 180ms;
+  --motion-tab: 220ms;
+  --motion-reveal: 480ms;
+  --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --font:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }

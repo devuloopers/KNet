@@ -1,7 +1,13 @@
 import { createRoot } from "react-dom/client";
+import { useLayoutEffect } from "react";
 import { App } from "./app/App";
+import { enhanceWebsite } from "./showcase";
 
-/** Serve-only entry: production uses build-rendered React markup without browser JavaScript. */
+/** Development uses React; production only ships the independent, small tab-enhancement module. */
+function DevelopmentApp() {
+  useLayoutEffect(() => enhanceWebsite(), []);
+  return <App />;
+}
 const root = document.getElementById("root");
 if (!root) throw new Error("The website root is missing.");
-createRoot(root).render(<App />);
+createRoot(root).render(<DevelopmentApp />);

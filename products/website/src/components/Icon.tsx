@@ -5,7 +5,16 @@ export function Icon({
   name,
   ...props
 }: SVGProps<SVGSVGElement> & {
-  name: "github" | "devices" | "conditions" | "intercept" | "arrow";
+  name:
+    | "github"
+    | "devices"
+    | "conditions"
+    | "intercept"
+    | "arrow"
+    | "shield"
+    | "copy"
+    | "code"
+    | "download";
 }) {
   if (name === "github") {
     return (
@@ -50,6 +59,17 @@ export function Icon({
           <path d="M10 13a5 5 0 0 0 7 .1l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7-.1l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" />
         </>
       )}
+      {name === "shield" && (
+        <path d="M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7l-9-4Z" />
+      )}
+      {name === "copy" && (
+        <>
+          <rect x="8" y="8" width="13" height="13" rx="2" />
+          <path d="M16 8V3H3v13h5" />
+        </>
+      )}
+      {name === "code" && <path d="m8 6-6 6 6 6m8-12 6 6-6 6M14 3l-4 18" />}
+      {name === "download" && <path d="M12 3v12m-5-5 5 5 5-5M3 16v5h18v-5" />}
       {name === "arrow" && <path d="M5 12h14m-5-5 5 5-5 5" />}
     </svg>
   );

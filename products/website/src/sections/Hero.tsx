@@ -1,45 +1,52 @@
 import { DownloadLink } from "../components/DownloadLink";
-import { preview } from "../../.generated/preview";
+import { ProductImage } from "../components/ProductImage";
+import { site } from "../content/site";
 
-// Wide desktops use a two-column hero; smaller screens retain the full-width preview.
-const previewSizes =
-  "(min-width: 1512px) 907px, (min-width: 1100px) 62vw, 94vw";
-
-/** One sentence and the actual deterministic KNet render keep the homepage product-focused. */
+/** The complete product capture fits the initial desktop viewport without being cropped. */
 export function Hero() {
   return (
-    <section className="hero" aria-labelledby="hero-title">
-      <div className="hero-copy container">
-        <p className="eyebrow">Network Inspector &amp; API Studio</p>
-        <h1 id="hero-title">
-          Your app’s traffic.
-          <br />
-          <span>Clearly understood.</span>
-        </h1>
-        <p className="hero-description">
-          Inspect traffic. Replay requests. Test real conditions.
-        </p>
-        <DownloadLink />
-      </div>
-      <figure className="product-preview container">
-        <picture>
-          <source
-            type="image/avif"
-            srcSet={preview.avif}
-            sizes={previewSizes}
-          />
-          <img
-            src={preview.default}
-            srcSet={preview.webp}
-            sizes={previewSizes}
-            width="1600"
-            height="960"
-            fetchPriority="high"
-            decoding="async"
+    <>
+      <section
+        className="hero showcase-layout container"
+        aria-labelledby="hero-title"
+      >
+        <div className="hero-copy showcase-copy">
+          <p className="eyebrow">Network Inspector &amp; API Studio</p>
+          <h1 id="hero-title">
+            Understand traffic.
+            <br />
+            <span>Control</span> every request.
+          </h1>
+          <p className="hero-description">
+            Inspect, replay and test your app’s network traffic.
+          </p>
+          <div className="hero-actions">
+            <DownloadLink />
+            <a className="text-link" href={site.docs}>
+              Read the docs
+            </a>
+          </div>
+        </div>
+        <figure className="product-preview">
+          <ProductImage
+            id="traffic"
+            hero
             alt="KNet Desktop showing separate device tabs, captured demo requests and a formatted JSON response."
           />
-        </picture>
-      </figure>
-    </section>
+        </figure>
+      </section>
+      <div className="protocols container">
+        <ul aria-label="Protocol workspaces">
+          {["HTTP / HTTPS", "GraphQL", "WebSocket", "GraphQL WS", "gRPC"].map(
+            (label) => (
+              <li key={label}>{label}</li>
+            ),
+          )}
+        </ul>
+        <a href={site.capabilityMatrix}>
+          Protocol support <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </>
   );
 }

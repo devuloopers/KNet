@@ -1,5 +1,8 @@
 # KNet public website implementation plan
 
+This document records the original minimal-page implementation. The approved 2026-11-16 expansion is
+tracked separately in the [feature showcase and automatic artwork plan](website_feature_showcase_plan.md).
+
 Status: [COMPLETED] implementation and local qualification on 2026-11-15.
 Public domain configuration, registry publication and actual Coolify deployment remain [PENDING].
 

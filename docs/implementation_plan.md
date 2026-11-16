@@ -1,5 +1,111 @@
 # KNet Implementation Plan
 
+## Website feature label cleanup (2026-11-16) [COMPLETED]
+
+Remove the repeated feature label above each tab panel's main title; the tab row already identifies
+the selected feature. Rebuild the local preview and verify the feature panels still lay out correctly.
+
+Removed the repeated label from all five panels. Build/TypeScript, direct DOM verification and four
+targeted Chromium activation/stable-layout cases passed; whitespace validation passed.
+
+## Website motion and default Traffic tab (2026-11-16) [COMPLETED]
+
+Make Traffic the shared default while retaining explicit feature links. Add native browser tab
+crossfades, one-time scroll reveals, smooth anchor navigation and restrained hover feedback, with
+stable geometry, accessible outgoing panels, reduced-motion support and no animation library.
+
+Implemented shared default selection, native crossfades/scroll reveals and theme-owned hover/underline
+timing. Rapid transitions cancel cleanly; focus, unavailable APIs and dynamic reduced-motion changes
+retain visible content. All 144 browser cases and 34 unit cases passed. Build/TypeScript, lint,
+formatting, source-artwork verification and the strict-source production container passed, including
+native animation under its CSP. See [qualification evidence](website_qualification.md#website-motion-and-default-traffic-2026-11-16).
+
+## Website Protected Traffic field spacing (2026-11-16) [COMPLETED]
+
+Match the Protected Traffic artwork's label-to-dropdown gap to the production screen's shared theme
+spacing, regenerate verified Compose artwork and review the corrected field in the website preview.
+
+The fixture now uses `KNetTheme.spacing.xs` between its label and selector, matching the existing
+desktop field. All eight Compose captures regenerated successfully; source/dimension/hash verification,
+the static build/TypeScript and three cross-browser feature activation checks passed. Reviewed the
+actual field from the rebuilt local preview. See the
+[qualification record](website_qualification.md#protected-traffic-field-spacing-2026-11-16).
+
+## Website feature tabs with hero layout (2026-11-16) [COMPLETED]
+
+Use the initial section's open two-column presentation for the five feature tabs: tabs above larger
+feature titles and full screenshots, without the outer card or extra introductory heading. Share layout
+and title styling with the hero, preserve responsive stacking and accessible tabs, and retain complete
+image proportions and stable panel geometry.
+
+Implemented shared showcase layout/type/spacing, an accessible hidden section heading, larger
+proportional screenshots and shared stacked rows that keep image positions steady between tabs.
+All 120 Chromium/Firefox/WebKit cases passed, including the added hero-scale checks and stronger
+image-position assertions. Build/TypeScript, lint, formatting and whitespace checks passed. Reviewed
+actual desktop/mobile previews; [qualification evidence](website_qualification.md#feature-tabs-with-hero-layout-2026-11-16)
+records dimensions and retained logs.
+
+## Website feature preview side spacing (2026-11-16) [COMPLETED]
+
+Fit each feature screenshot's visible frame to its own proportions so short desktop viewports do not
+leave wide empty side bands. Retain complete top/bottom visibility, stable tab geometry, deferred
+loading and no-script/responsive behavior. Verify both frame-to-bitmap fit and viewport containment.
+
+Asset preparation now generates each verified source ratio as external CSS; responsive frames scale
+their width and height together, including before deferred images load. This removes wide internal side
+bands without cropping or layout shifts. All 117 browser cases passed with stronger bitmap/frame-fit
+assertions; the 34 unit cases, build/TypeScript, lint, formatting and whitespace checks passed. Reviewed
+the [updated Protected Traffic preview](assets/knet-website-feature-frame-fit.png). See the
+[qualification evidence](website_qualification.md#feature-preview-side-spacing-2026-11-16).
+
+## Website feature screenshot containment (2026-11-16) [COMPLETED]
+
+Correct the shared feature-tour frame so every screenshot retains its complete top and bottom, and
+cap desktop preview dimensions by the available viewport height. Preserve stable tab geometry,
+uncropped source images, deferred loading and the no-script/mobile layouts. Reproduce the reported
+short-window case, then verify every tab across browser engines, viewport changes and direct links.
+
+The shared image now fills a constrained box with proportional containment, preserving both 5:3 and
+8:5 captures. Desktop frames cap their height from the available viewport without changing tab
+geometry. At 1600x670, the Network Conditions preview now ends at 610.8px rather than extending to
+800.3px. All 117 Chromium/Firefox/WebKit cases passed, including 27 added regression cases covering
+all five tabs at seven viewport sizes, resizing/permalinks and no-script fallbacks. Build, TypeScript,
+lint, formatting, artwork freshness and whitespace checks passed. See the
+[qualification evidence](website_qualification.md#feature-screenshot-containment-2026-11-16).
+
+## Website feature showcase and automatic Compose artwork (2026-11-16) [COMPLETED]
+
+Implemented the approved responsive page, accessible five-feature tour, conditions/protection panels,
+multi-device/Android Companion section and utility highlights. All downloads still use GitHub Releases;
+the title is exactly `KNet - Network Inspector & API Studio`. A small local tab module is the only
+visitor JavaScript; the actual Compose UI is rendered to static images during the build workflow.
+
+Eight real-component scenarios run in six isolated JVM test owners. Empty per-run staging directories,
+visible-label/stable-frame checks, atomic manifest publication and source/dimension/content provenance
+prevent stale/missing screenshots from passing release packaging. Two full isolated runs produced
+byte-identical PNGs for every scenario. UI/theme/build input changes trigger regeneration in the
+existing guarded Actions/GHCR/Coolify pipeline; no new secrets or production Kotlin dependencies were added.
+
+Qualification passed 34 web unit cases, 16 artwork/source cases, 30 existing deployment-guard cases,
+six fixture cases/eight scenes, 90 Chromium/Firefox/WebKit cases and six architecture checks. Strict
+production npm/container builds passed; a real stale-artwork Docker build was rejected. Reviewed
+1440px desktop and 375px mobile renders. Compressed JS/CSS is 4,262 bytes; default hero WebP is 58,102
+bytes. The production-container mobile audit scored 99 performance, 100 accessibility and 100 best
+practices with zero layout shift; its SEO robot probe is blocked by the retained connection CSP,
+documented in the [qualification report](website_qualification.md#feature-showcase-and-automatic-compose-artwork-2026-11-16).
+
+The [completed plan](website_feature_showcase_plan.md) and
+[machine-readable evidence](qualification/website-showcase-2026-11-16.json) record scope and checks.
+Hosted Actions rendering and Coolify delivery run through the website workflow after source publication;
+the qualification report distinguishes completed local checks from hosted delivery.
+
+## Website browser-title separator (2026-11-16) [COMPLETED]
+
+Use the exact homepage title `KNet - Network Inspector & API Studio`, with a regular ASCII hyphen,
+and match Open Graph/Twitter titles. The generated 404 title uses the same separator convention.
+Production build and all 20 existing metadata cases passed. Direct checks of the built HTML verified
+the exact homepage/social titles and 404 separator. Redesign implementation remains pending.
+
 ## Coordinated Desktop and Companion 0.2.0 release (2026-11-15) [COMPLETED]
 
 Published Desktop and Companion 0.2.0 from the same verified source commit

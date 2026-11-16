@@ -8,7 +8,12 @@ export default defineConfig({
   workers: 2,
   timeout: 60_000,
   reporter: [["list"], ["html", { open: "never" }]],
-  use: { baseURL: "http://127.0.0.1:4174", trace: "retain-on-failure" },
+  // Functional/layout snapshots are deterministic; motion.spec.ts separately exercises live animation.
+  use: {
+    baseURL: "http://127.0.0.1:4174",
+    trace: "retain-on-failure",
+    reducedMotion: "reduce",
+  },
   webServer: {
     command: "npm run preview",
     url: "http://127.0.0.1:4174/healthz",

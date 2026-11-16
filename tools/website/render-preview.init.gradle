@@ -1,12 +1,34 @@
-// Optional artwork regeneration only; ordinary website builds never load Gradle or Compose.
+// Optional real-UI artwork only. Test fixtures never enter product source sets or npm dependencies.
 gradle.projectsEvaluated {
-    def app = gradle.rootProject.project(':ui:desktop:app')
-    app.kotlin.sourceSets.getByName('jvmTest').kotlin.srcDir(
-        new File(gradle.rootProject.projectDir, 'tools/website/src'))
-    app.dependencies.add('jvmTestImplementation', app.project(':ui:desktop:httpPanel'))
-    app.tasks.withType(Test).configureEach {
-        systemProperty 'knet.website.artwork', new File(gradle.rootProject.projectDir,
-            'products/website/artwork/traffic-preview.png').absolutePath
-        systemProperty 'user.timezone', 'UTC'
+    def fixtureRoot = new File(gradle.rootProject.projectDir, 'tools/website')
+    def modules = [
+        ':ui:desktop:app': 'src',
+        ':ui:desktop:apiStudio': 'scenarios/apiStudio',
+        ':ui:desktop:networkConditions': 'scenarios/networkConditions',
+        ':ui:desktop:protectedTraffic': 'scenarios/protectedTraffic',
+        ':ui:desktop:breakpointManager': 'scenarios/breakpointManager',
+        ':ui:companion:sharedUi': 'scenarios/companion',
+    ]
+    modules.each { path, directory ->
+        def target = gradle.rootProject.project(path)
+        target.kotlin.sourceSets.getByName('jvmTest').kotlin.srcDir(new File(fixtureRoot, directory))
+        target.kotlin.sourceSets.getByName('jvmTest').kotlin.srcDir(new File(fixtureRoot, 'common'))
+        target.dependencies.add('jvmTestImplementation', target.project(':ui:core'))
+        if (path == ':ui:desktop:app' || path == ':ui:desktop:apiStudio') {
+            target.dependencies.add('jvmTestImplementation', target.project(':ui:desktop:httpPanel'))
+        }
+        target.tasks.withType(Test).configureEach {
+            // Regeneration must execute even if the prior Gradle test result is cached/up to date.
+            outputs.upToDateWhen { false }
+            outputs.cacheIf { false }
+            maxParallelForks = 1
+            systemProperty 'knet.website.artworkDirectory', gradle.startParameter.projectProperties.get(
+                'knetWebsiteArtworkDirectory', new File(gradle.rootProject.projectDir,
+                    'products/website/artwork').absolutePath)
+            systemProperty 'user.timezone', 'UTC'
+            systemProperty 'user.language', 'en'
+            systemProperty 'user.country', 'US'
+            systemProperty 'java.awt.headless', 'true'
+        }
     }
 }

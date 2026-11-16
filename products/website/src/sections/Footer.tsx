@@ -1,22 +1,16 @@
 import { Brand } from "../components/Brand";
 import { site } from "../content/site";
 
-/** Short local-first statement and repository-backed support destinations. */
+/** Repository-backed footer destinations keep documentation and all releases directly accessible. */
 export function Footer() {
   return (
-    <>
-      <p className="project-note container">
-        Open source. Runs on your machine.{" "}
-        <a href={site.docs}>Explore the docs.</a>
-      </p>
-      <footer className="site-footer container">
-        <Brand />
-        <nav aria-label="Footer navigation">
-          <a href={site.releases}>Releases</a>
-          <a href={site.docs}>Docs</a>
-          <a href={site.repository}>GitHub</a>
-        </nav>
-      </footer>
-    </>
+    <footer className="site-footer container">
+      <Brand />
+      <nav aria-label="Footer navigation">
+        <a href={site.docs}>Docs</a>
+        <a href={site.repository}>GitHub</a>
+        <a href={site.releases}>Releases</a>
+      </nav>
+    </footer>
   );
 }

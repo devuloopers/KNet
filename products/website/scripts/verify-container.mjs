@@ -18,6 +18,12 @@ if (process.env.KNET_CONTAINER_SKIP_BUILD !== "true") {
     `KNET_SITE_ENV=${process.env.KNET_SITE_ENV || "preview"}`,
     "--build-arg",
     `KNET_SITE_ORIGIN=${process.env.KNET_SITE_ORIGIN || ""}`,
+    "--build-arg",
+    `KNET_ARTWORK_REQUIRE_FRESH=${process.env.KNET_ARTWORK_REQUIRE_FRESH || "false"}`,
+    "--build-arg",
+    `KNET_ARTWORK_SOURCE_SHA=${process.env.KNET_ARTWORK_SOURCE_SHA || ""}`,
+    "--build-arg",
+    `KNET_ARTWORK_SOURCE_DIGEST=${process.env.KNET_ARTWORK_SOURCE_DIGEST || ""}`,
     "../..",
   ]);
 }
@@ -64,12 +70,20 @@ try {
   );
   assert.equal(response.headers.get("cache-control"), "no-cache");
   const css = html.match(/href="(\/assets\/[^"]+\.css)"/)[1];
-  assert.doesNotMatch(
-    html,
-    /<script\b/i,
-    "The static page needs no browser runtime.",
+  const script = html.match(/src="(\/assets\/[^" ]+\.js)"/)[1];
+  assert.match(
+    response.headers.get("content-security-policy"),
+    /script-src 'self'/,
   );
-  for (const [path, type] of [[css, /text\/css/]]) {
+  assert.equal(
+    (html.match(/<script\b/g) || []).length,
+    1,
+    "Only the local tabs/motion enhancement ships.",
+  );
+  for (const [path, type] of [
+    [css, /text\/css/],
+    [script, /(javascript|ecmascript)/],
+  ]) {
     const asset = await fetch(`${base}${path}`, {
       headers: { "Accept-Encoding": "gzip" },
     });
@@ -104,6 +118,7 @@ try {
     const page = await browser.newPage({
       viewport: { width: 1280, height: 900 },
     });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => {
@@ -119,6 +134,35 @@ try {
         .last()
         .getAttribute("href"),
       "https://github.com/devuloopers/KNet/releases",
+    );
+    assert.equal(
+      await page.getByRole("tabpanel").getAttribute("aria-labelledby"),
+      "tab-traffic",
+    );
+    const nativeMotion = await page.evaluate(() => {
+      document.querySelector('[data-feature-tab="network-conditions"]').click();
+      const selected = document.querySelector(
+        '[data-feature-panel="network-conditions"]',
+      );
+      const previous = document.querySelector('[data-feature-panel="traffic"]');
+      return (
+        selected.getAnimations().length > 0 &&
+        previous.inert &&
+        previous.getAttribute("aria-hidden") === "true"
+      );
+    });
+    assert.ok(
+      nativeMotion,
+      "Native tab motion must execute under the production CSP.",
+    );
+    assert.equal(await page.getByRole("tabpanel").count(), 1);
+    await page.getByRole("tab", { name: "API Studio", exact: true }).click();
+    // Capture every static section, without preserving partially animated/offscreen reveal states.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.waitForFunction(
+      () =>
+        !document.documentElement.hasAttribute("data-motion-enabled") &&
+        document.getAnimations().length === 0,
     );
     await mkdir("test-results/container", { recursive: true });
     await page.screenshot({
@@ -145,7 +189,7 @@ try {
     await browser.close();
   }
   console.log(
-    "Production container checks passed: non-root/read-only runtime, health, headers, compression, caching, six 404 boundaries and JavaScript-free browser layout under CSP.",
+    "Production container checks passed: non-root/read-only runtime, health, headers, compression, caching, six 404 boundaries and accessible static-page tabs under CSP.",
   );
 } finally {
   docker(["rm", "--force", container]);

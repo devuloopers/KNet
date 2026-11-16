@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-16",
+  "scope": "Local implementation and automated qualification; hosted Actions/Coolify not executed.",
+  "title": "KNet - Network Inspector & API Studio",
+  "sourceCommit": "1f5ce3d5920f967d7028fbd8106124c7e88fb482",
+  "renderInputDigest": "570881525e74e4bcd1da33bdf80afe9393c9d8cf0d32d7081992f920a775e8e2",
+  "tests": {
+    "webUnit": 34,
+    "artworkFreshness": 16,
+    "existingDeploymentGuards": 30,
+    "composeFixtureCases": 6,
+    "composeScenarios": 8,
+    "browserCases": 90,
+    "architectureChecks": 6
+  },
+  "repeatRender": "Two full isolated runs produced byte-identical PNGs for all eight scenarios.",
+  "container": "Fresh-artwork production build passed. A separate real Docker build with a stale digest was rejected.",
+  "assets": {
+    "compressedJavaScriptAndCssBytes": 4262,
+    "defaultHeroBytes": 58102,
+    "codeBudgetBytes": 153600,
+    "heroBudgetBytes": 409600
+  },
+  "lighthouse": {
+    "version": "13.6.0",
+    "mode": "Production Nginx container, default mobile simulation, local machine.",
+    "scores": {
+      "performance": 99,
+      "accessibility": 100,
+      "best-practices": 100,
+      "seo": 92
+    },
+    "metrics": {
+      "first-contentful-paint": "0.8\u00a0s",
+      "largest-contentful-paint": "1.5\u00a0s",
+      "cumulative-layout-shift": "0",
+      "total-blocking-time": "100\u00a0ms",
+      "speed-index": "0.8\u00a0s"
+    },
+    "seoLimitation": "Fetch of robots.txt failed: Protocol error (Network.loadNetworkResource): Protocol error (Network.loadNetworkResource): CSP violation"
+  },
+  "visuals": [
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "title": "KNet - Network Inspector & API Studio",
+      "pageWidth": 1440,
+      "errors": []
+    },
+    {
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "title": "KNet - Network Inspector & API Studio",
+      "pageWidth": 375,
+      "errors": []
+    }
+  ],
+  "evidenceDirectory": "/Users/devuloopers/.codex/verification/knet-website-showcase-2026-11-16",
+  "crawlerFiles": {
+    "robots": "HTTP 200, exact production allow/Sitemap directives verified outside page CSP.",
+    "sitemap": "HTTP 200, valid XML and exact production canonical location."
+  }
+}

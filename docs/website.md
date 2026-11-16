@@ -1,112 +1,158 @@
 # KNet public website
 
-The public website is an independent React/TypeScript/Vite product at `products/website`. It serves
-the selected minimal dark landing page, a real KNet UI render with demonstration data, and links to
-the existing repository. Both Download on GitHub actions and the footer Releases link use the
-GitHub Releases page at `https://github.com/devuloopers/KNet/releases`. There are no direct binary
-downloads or release-API calls.
+KNet's public website is the independent React/TypeScript/Vite product at `products/website`. The
+professional dark landing page includes the complete Traffic hero, five-feature tour, network/protected
+traffic highlights, multi-device workspaces, Android Companion and import/export/copy/scripting links.
+All downloads go to https://github.com/devuloopers/KNet/releases. There are no direct binary downloads,
+release API requests, accounts or live desktop/device connections.
 
-## Local development and commands
+The homepage, Open Graph and Twitter title is exactly `KNet - Network Inspector & API Studio`, using a
+regular ASCII hyphen. Capability descriptions link to the current README matrix and retain experimental
+status for advanced protocols and Android Companion. iOS packet-tunnel release availability is not implied.
+
+## Local commands
 
 Use Node 24 (`products/website/.nvmrc`) and npm. From `products/website`:
 
 ```sh
 npm ci
 npm run dev
-```
-
-Vite listens on `http://127.0.0.1:5174`. The asset preparation hook reads existing `desktopBrand`
-sources and the checked-in product screenshot; it does not build or launch KNet. No credentials or
-environment settings are needed for local development.
-
-```sh
 npm run build
 npm run preview
-```
-
-The production-shaped static preview listens on `http://127.0.0.1:4174`. The build performs strict
-type checking, builds the browser assets and build-only React renderer, injects the same component
-tree into the HTML, emits crawl metadata and checks compressed asset budgets. The final output is
-`dist`; `.prerender` is a temporary build tool, not a runtime server.
-
-Checks, after a build:
-
-```sh
 npm run lint
 npm run typecheck
-npm run test
-npx playwright install chromium firefox webkit
+npm test
 npm run test:e2e
 npm run test:container
 ```
 
-Browser tests start and stop their own static preview. They never open the user's desktop app or
-read its captured traffic. The container check builds from the repository root, validates Nginx,
-starts a disposable read-only/non-root container on a random loopback port and removes it afterward.
-It requires a running Docker daemon. `KNET_CONTAINER_SKIP_BUILD=true` reuses an already built image;
-`KNET_WEBSITE_IMAGE` overrides the default local `knet-website:verification` tag.
+Vite development uses http://127.0.0.1:5174; the static preview and browser-suite server use
+http://127.0.0.1:4174. The browser suite starts/stops its own preview, so close an existing server on that
+port first. `PORT` can select a different local preview port. Browser setup uses
+`npx playwright install chromium firefox webkit`. Container checks require a running Docker daemon and
+remove their disposable non-root/read-only container afterward. `KNET_CONTAINER_SKIP_BUILD=true` reuses a
+previous image; `KNET_WEBSITE_IMAGE` selects its local tag.
 
-## Ownership and design
+Normal npm work uses the checked-in safe artwork and needs no JVM. It validates the entire image manifest
+before building; missing/corrupt image bytes fail rather than leaving broken screenshots. Generated
+`public`, `.generated`, `.prerender` and `dist` files remain ignored.
 
-- `src/content/site.ts`: public link destinations and brief feature labels.
-- `src/components` and `src/sections`: semantic shared links, branding and page sections.
-- `src/styles/tokens.css`: centralized browser design tokens mapped to KNet's dark Compose palette;
-  `site.css` owns responsive behavior. System light mode never changes this page's palette.
-- `src/development.tsx`: serve-only Vite development mounting. Production needs no client JavaScript
-  for this page's native links, so no React runtime or hydration is shipped to visitors.
-- `src/entry-server.tsx`: build-only HTML rendering. The page's navigation and content also work
-  without JavaScript, and there are no API, WebSocket or third-party asset requests on page load.
-- `scripts/prepare-assets.mjs`: projects existing brand files into ignored `public` output and
-  produces content-hashed AVIF/WebP screenshot variants. The generated manifest is ignored too.
-- `scripts/site-environment.mjs`, `validate-environment.mjs`, `prerender.mjs`: public configuration
-  validation and static metadata. These scripts consume no deployment credentials.
-- `scripts/check-budgets.mjs`: enforces 150 KiB gzip JavaScript/CSS and a 400 KiB default WebP hero
-  budget, then writes the measured `dist/asset-budget.json`.
-- `scripts/serve.mjs`: local static verification server, with real missing-file/page 404 responses.
-- `deployment/nginx.conf`, `Dockerfile`: final static hosting, described below.
-- `scripts/verify-container.mjs`: executes the hosting acceptance checks against that built image.
-- `vite.config.ts`: React tooling and the serve-only development entry; `tsconfig.json` enforces
-  strict browser/build types. `eslint.config.js`, `.prettierignore`, `vitest.config.ts` and
-  `playwright.config.ts` own static analysis, formatting boundaries, unit discovery and the three-engine
-  browser matrix. `package.json`/lockfile and `.nvmrc` pin the installation and Node development line.
+## Ownership and visitor runtime
 
-Node's system font stack and local SVG symbols avoid remote fonts and an icon-library dependency.
-Header download controls collapse on narrow screens while the main download action remains visible;
-Docs and GitHub remain directly accessible. Images reserve their dimensions to prevent layout shift.
+- `src/content/site.ts`: typed feature identities, short copy, alt text and public destinations.
+- `src/components`: shared brand, download links, SVG symbols and responsive `ProductImage` frames.
+- `src/sections`: Header, Hero, feature tour/highlights/devices/utilities/closing action and Footer.
+- `src/styles/tokens.css` and `site.css`: KNet dark colors, shared dimensions, responsive layout, focus
+  and reduced-motion policy. System light mode never changes the palette.
+- `src/entry-server.tsx` and `scripts/prerender.mjs`: render all meaningful React content to static HTML.
+  `src/development.tsx` mounts React only in Vite development.
+- `src/showcase.ts`: the production browser entry. It enhances native feature links into manual
+  activation tabs with arrow/Home/End navigation, Enter/Space selection, selected-panel permalinks and
+  touch support, and owns the enhancement lifetime/cleanup. There is no React hydration, Compose/Wasm,
+  Kotlin engine or backend runtime in the site.
+- `src/motion.ts`: native Web Animations/IntersectionObserver ownership, interrupted tab transitions,
+  scroll reveals, keyboard/hash visibility and reduced-motion changes. It joins the same small bundle;
+  no animation library or persistent frame/timer loop is loaded.
+- `scripts/artwork.mjs`: source-image manifest/path/dimension/hash and release-identity validation.
+- `scripts/prepare-assets.mjs`: shared brand projection, AVIF/WebP optimization, content-hashed image
+  names, generated TypeScript image catalogue/source-ratio CSS and public source-provenance manifest.
+- `scripts/site-environment.mjs`, `validate-environment.mjs`: public-only origin/indexing/metadata policy.
+- `scripts/check-budgets.mjs`: enforces 150 KiB gzip JavaScript/CSS and 400 KiB default WebP hero budgets.
+- `scripts/serve.mjs`, `deployment/nginx.conf`, `Dockerfile`, `scripts/verify-container.mjs`: local preview
+  and production-shaped static hosting, security/cache/health checks and browser verification under CSP.
 
-At viewport widths of 1100px and above, the hero places its copy/download action on the left and the
-actual KNet preview on the right. A wider 1400px content cap, responsive desktop type/spacing and compact
-feature highlights match the approved desktop proposal. Smaller viewports keep the original centered,
-stacked presentation. The shared image `sizes` hint reflects its narrower desktop column without
-adding JavaScript or altering the image's aspect ratio.
+Without JavaScript, every feature remains a native anchor destination with its description and real
+capture. With JavaScript, inactive panels share a grid cell and retain intrinsic layout contributions,
+so different descriptions cannot shift the section when selecting another feature. Hidden panels are
+not focusable or exposed as active content. Deferred image sources are activated only for selected tour
+panels; `<noscript>` supplies their normal images to no-script visitors. The hero loads promptly, while
+other screenshots are lazy-loaded. Width/height attributes reserve image geometry before loading.
+Traffic is the default tab and initial non-deferred feature image. A valid `#feature-...` permalink
+retains its requested selection; ordinary visits and unknown hashes start with Traffic.
 
-Desktop hero spacing also responds to viewport height. The screenshot width is capped by the height
-remaining after the header, hero spacing and frame borders, using the image's 5:3 ratio. The frame
-aligns to the start of its grid row so taller copy cannot push the screenshot below the initial
-viewport. Page content remains scrollable; there is no fixed-height page or clipped image treatment.
+Tab content crossfades for 220ms in the existing shared grid. The outgoing layer becomes inert and
+ARIA-hidden synchronously, remains visual only while exiting, and is removed from that visual state
+afterward. Rapid changes cancel obsolete effects, and clicking the selected tab does not restart one.
+Offscreen sections fade in once over 480ms; above-fold and no-script content starts visible. Smooth
+anchor navigation and 180ms hover/underline feedback use the same theme duration/easing tokens.
+Reveals change opacity, preserving section geometry and native anchor positions.
 
-All direct npm dependencies are exact versions and `npm ci` uses the checked-in lockfile. The scoped
-`@typescript-eslint/typescript-estree` minimatch override selects 11.0.1 to remove the vulnerable
-older transitive version under Node 22+/24. Lint, type checks, tests and `npm audit` verify that graph;
-review/remove the override when upstream adopts the fixed dependency.
+Observers unobserve completed sections; finished effects release their animation resources. There is
+no permanent `will-change` or continuous animation. Keyboard focus and explicit anchor targets reveal
+immediately. Missing observer/animation APIs preserve usable content. Reduced-motion preferences are
+honored on startup and when changed: pending content becomes visible, running effects cancel and smooth
+scrolling stops. Re-enabling motion never hides already visible content.
 
-## Product artwork provenance and regeneration
+Every feature-tour frame uses the corresponding verified source's aspect ratio. Asset preparation emits
+external CSS keyed by the frame's `data-artwork` identity, so dimensions are reserved even before a
+deferred image loads and stay compatible with the existing CSP. At desktop widths a height-derived
+width cap scales both dimensions proportionally, leaving room for the heading, tabs and card insets.
+The frame follows the bitmap rather than adding empty bands; shared viewport dimensions live in
+`tokens.css`. All panels retain the same geometry while switching tabs, including deferred images and
+no-script fallbacks. Phone/tablet sections retain natural page scrolling.
 
-`products/website/artwork/traffic-preview.png` is rendered from actual KNet components, including
-device tabs, navigation, Traffic controls, table, inspector and code viewer. It contains authored
-`api.example.com` exchanges, sample JSON and synthetic device identities only. No running app,
-traffic database, certificates, pairing credentials or private hostnames are read.
+The complete hero screenshot preserves its aspect ratio and fits available desktop viewport height.
+The feature tour reuses the hero's `showcase-layout`, title scale, spacing and responsive stacking:
+tabs sit above open two-column content, without an outer card or a second visible introduction. Panel
+copy begins with its main title; the feature name appears in the tab row without a repeated label.
+The feature section retains an accessible hidden heading. In stacked enhanced panels, shared subgrid rows
+keep screenshot positions stable across different copy lengths; no-script panels remain normal flowing
+sections. Removing the extra heading/card makes room for larger complete captures in short windows.
+Narrow screens stack content. Header actions wrap under magnification; tabs scroll within their own
+row. All screenshots are static examples, including the network graph. No external font, analytics,
+image CDN, application API or control WebSocket is requested by the page.
 
-The optional `tools/website` fixture is added only to a one-off test compilation by its init script;
-it is not part of the default application source sets. From the repository root:
+## Actual Compose artwork and automatic regeneration
+
+From the repository root, with the existing JDK 21/Gradle toolchain:
 
 ```sh
-./gradlew :ui:desktop:app:jvmTest --tests '*WebsiteProductPreviewTest' --init-script tools/website/render-preview.init.gradle --no-daemon
+python3 -m unittest discover -s tools/website -p 'test_*.py'
+python3 tools/website/render_artwork.py
+python3 tools/website/render_artwork.py --verify
 ```
 
-This regeneration step needs the existing JVM/Compose toolchain. Subsequent npm builds consume the
-checked-in PNG and need no JVM. Source logo, favicon, touch icon and social artwork remain owned by
-`desktopBrand`; their generated web projections are not independent editable brand sources.
+`tools/website/scenarios.json` inventories eight captures: Traffic, multi-device, API Studio, Intercepts,
+Network Conditions, Protected Traffic, Companion pairing and Companion connected. The optional init
+script adds isolated fixture sources only to the respective modules' JVM tests; normal product builds
+never include them. Shared rendering utilities live in `tools/website/common`.
+
+Desktop fixtures compose the actual feature components (navigation/device tabs/table/inspector,
+collections/editors/result panels, live interception drawer, condition workspace, protected manager
+shell/table). Companion renders its production root with authored presentation state. Fixture composition
+and sample state are owned by `tools/website`; components and their internal layouts remain owned by
+the product modules. A new screen/feature or a change to the surrounding fixture composition needs a
+scenario update; changes within the reused components regenerate automatically.
+Fixture form layouts follow production spacing: the Protected Traffic header uses the same
+`KNetTheme.spacing.xs` label-to-dropdown gap as the real manager.
+
+No application bootstrap, user database, private traffic, body store, certificates, pairing credentials,
+clipboard, camera, VPN or attached device is used. All endpoints and identities are authored examples.
+Scene dimensions, locale, timezone, density and frame timestamps are fixed. Focus is cleared and the
+renderer waits for half a second of identical output after asynchronous syntax preparation; unsettled
+scenes fail on a bounded deadline. Required semantic labels
+must be visible inside the viewport; every expected PNG must have its declared dimensions and non-empty
+content. The output manifest records Git source commit, a digest of render inputs (including new files
+and deletions), rendering configuration, toolchain/platform and each image's dimensions/SHA-256.
+
+Every render starts in a new empty temporary output directory; existing baseline PNGs cannot fill a
+missing scenario. The runner publishes `products/website/artwork/manifest.json` atomically only after all fixture tasks
+succeed and source inputs remain unchanged throughout rendering. `--verify` rejects old commits, changed
+components/theme/build inputs, missing or altered images and changed rendering configuration. A failed
+render leaves the prior manifest intact; it cannot validate against changed/partial output.
+
+Local npm work can consume the safe baseline artwork. In delivery, fresh rendering is mandatory:
+`KNET_ARTWORK_REQUIRE_FRESH=true` requires both `KNET_ARTWORK_SOURCE_SHA` and
+`KNET_ARTWORK_SOURCE_DIGEST` to match the freshly verified manifest. These public provenance values also
+pass into the Docker build as build arguments. They contain no secrets. CI performs source verification
+again immediately before container packaging, so the verified npm and container builds consume the
+same source PNGs/manifest. Render failures or stale/missing artwork block publication and deployment.
+
+Ordinary UI changes need no manual screenshots or image upload. CI regenerates all scenarios using
+pinned source dependencies, JDK 21, Ubuntu 24.04 and installed DejaVu/fontconfig support. Generated images
+are retained as qualification artifacts; CI never commits them back or creates a regeneration loop.
+Checked-in safe PNGs keep local npm development independent of Gradle. Shared logo/favicon/social-brand
+sources remain in `desktopBrand`, with no independently redrawn website brand source.
 
 ## Preview and production metadata
 
@@ -137,7 +183,7 @@ The runtime listens on 8080 as UID/GID 101 and supports a read-only root filesys
 `/tmp`. `/healthz` returns 200. Nginx owns compression, MIME types, security headers and caching:
 HTML/metadata/brand paths revalidate; only content-hashed code and screenshot files are immutable.
 Unknown pages/assets return 404 rather than serving the homepage. There is no `/api` or `/ws`
-reverse proxy. The Content Security Policy blocks scripts/connections and permits local styles and imagery.
+reverse proxy. The Content Security Policy permits only the local tabs/motion bundle, styles and imagery; it blocks external scripts, connections, frames and form submission.
 Coolify's reverse proxy owns the public hostname and HTTPS certificate.
 
 ## GitHub Actions, registry and Coolify
@@ -145,12 +191,13 @@ Coolify's reverse proxy owns the public hostname and HTTPS certificate.
 `.github/workflows/website-deployment.yml` is independent of desktop/Companion delivery. Relevant
 pull requests verify the site in unindexable preview mode. Website pushes to `master`, and manual
 **KNet website** runs on `master`, verify and automatically deliver the production site. Triggers
-cover `products/website`, `desktopBrand`, `tools/deployment`, the workflow and root Docker context
-rules. The default/release branch was checked as `master` on 2026-11-15.
+cover the website, `tools/website`, consumed UI/core/application/engine/data and brand sources,
+Gradle/build configuration, deployment tools, the workflow and root Docker context rules. The default/release branch was checked as `master` on 2026-11-15.
 
 The production sequence is:
 
-1. Run the deployment-tool tests, locked npm install, build, lint/type checks, unit tests, dependency
+1. Run renderer/freshness tests, render all real Compose captures, verify current source identity, then
+   run the deployment-tool tests, locked npm install, build, lint/type checks, unit tests, dependency
    audit, Chromium/Firefox/WebKit checks and actual container tests. A production build requires the
    repository's public `KNET_SITE_ORIGIN` variable before any image can be promoted.
 2. Save the verified image as a run-scoped artifact. The publication job loads that image without

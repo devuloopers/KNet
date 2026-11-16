@@ -59,8 +59,10 @@ packages/signing/provenance and public release URLs.
 
 The independent React/Vite landing page, GitHub-only download links, branding/artwork provenance,
 local commands and static Docker/Coolify delivery are documented in [`website.md`](website.md).
-Executed browser/container evidence and remaining public-domain setup are tracked in
+Executed browser/container evidence and delivery boundaries are tracked in
 [`website_qualification.md`](website_qualification.md).
+The approved full-feature redesign and automatic Compose screenshot pipeline are tracked in
+[`website_feature_showcase_plan.md`](website_feature_showcase_plan.md).
 
 ## Companion status
 

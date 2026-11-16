@@ -6,6 +6,20 @@ on:
       - 'products/website/**'
       - 'desktopBrand/**'
       - 'tools/deployment/**'
+      - 'tools/website/**'
+      - 'ui/**'
+      - 'core/**'
+      - 'application/**'
+      - 'engine/**'
+      - 'data/**'
+      - 'companionBrand/**'
+      - 'gradle/**'
+      - 'build-logic/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
       - '.dockerignore'
       - '.github/workflows/website-deployment.yml'
   push:
@@ -14,6 +28,20 @@ on:
       - 'products/website/**'
       - 'desktopBrand/**'
       - 'tools/deployment/**'
+      - 'tools/website/**'
+      - 'ui/**'
+      - 'core/**'
+      - 'application/**'
+      - 'engine/**'
+      - 'data/**'
+      - 'companionBrand/**'
+      - 'gradle/**'
+      - 'build-logic/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
       - '.dockerignore'
       - '.github/workflows/website-deployment.yml'
   workflow_dispatch:
@@ -39,11 +67,37 @@ jobs:
   verify:
     name: Verify and package website
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+      - name: Set up JDK for actual Compose artwork
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: zulu
+          java-version: '21'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+      - name: Install render fonts and Android build metadata
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes fontconfig fonts-dejavu-core
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-37.0' 'build-tools;37.0.0'
+      - name: Verify artwork failure and freshness boundaries
+        run: python3 -m unittest discover -s tools/website -p 'test_*.py'
+      - name: Render actual Compose screens and verify source freshness
+        run: |
+          python3 tools/website/render_artwork.py
+          python3 tools/website/render_artwork.py --verify
+          python3 - <<'PYTHON' >> "$GITHUB_ENV"
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('products/website/artwork/manifest.json').read_text())
+          print('KNET_ARTWORK_REQUIRE_FRESH=true')
+          print('KNET_ARTWORK_SOURCE_SHA=' + manifest['sourceCommit'])
+          print('KNET_ARTWORK_SOURCE_DIGEST=' + manifest['sourceDigest'])
+          PYTHON
       - name: Verify deployment request and release guards
         run: python3 -m unittest discover -s tools/deployment -p 'test_*.py'
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
@@ -68,6 +122,8 @@ jobs:
       - name: Verify real browser behavior
         working-directory: products/website
         run: npm run test:e2e
+      - name: Verify artwork source is still current
+        run: python3 tools/website/render_artwork.py --verify
       - name: Verify production-shaped container
         working-directory: products/website
         run: npm run test:container
@@ -90,6 +146,8 @@ jobs:
             products/website/playwright-report/
             products/website/test-results/
             products/website/dist/asset-budget.json
+            products/website/artwork/
+            **/build/test-results/jvmTest/TEST-*Website*.xml
 
   publish:
     name: Publish and promote verified website

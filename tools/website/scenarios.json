@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "traffic",
+      "module": ":ui:desktop:app",
+      "width": 1600,
+      "height": 960
+    },
+    {
+      "id": "multi-device",
+      "module": ":ui:desktop:app",
+      "width": 1600,
+      "height": 960
+    },
+    {
+      "id": "api-studio",
+      "module": ":ui:desktop:apiStudio",
+      "width": 1600,
+      "height": 960
+    },
+    {
+      "id": "intercepts",
+      "module": ":ui:desktop:breakpointManager",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "network-conditions",
+      "module": ":ui:desktop:networkConditions",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "protected-traffic",
+      "module": ":ui:desktop:protectedTraffic",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "companion-pairing",
+      "module": ":ui:companion:sharedUi",
+      "width": 840,
+      "height": 1680
+    },
+    {
+      "id": "companion-connected",
+      "module": ":ui:companion:sharedUi",
+      "width": 840,
+      "height": 1680
+    }
+  ]
+}

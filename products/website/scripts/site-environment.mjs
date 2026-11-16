@@ -51,7 +51,7 @@ export function metadataFor(configuration) {
       sitemap: null,
     };
   const origin = configuration.origin;
-  const title = "KNet — Network Inspector &amp; API Studio";
+  const title = "KNet - Network Inspector &amp; API Studio";
   const description =
     "Inspect traffic. Replay requests. Test real conditions. A local-first network inspector and API studio.";
   return {

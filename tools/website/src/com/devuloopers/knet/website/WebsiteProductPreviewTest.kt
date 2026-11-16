@@ -38,7 +38,8 @@ import kotlin.test.assertTrue
 class WebsiteProductPreviewTest {
     /** Emits a fixed-size image without opening the user's desktop app or reading its traffic database. */
     @Test
-    fun renderWebsiteArtwork() = EventQueue.invokeAndWait {
+    fun renderWebsiteArtwork() {
+        for (artwork in listOf(ArtworkScene.TRAFFIC, ArtworkScene.MULTI_DEVICE)) {
         val endpoints = listOf(
             Triple("GET", "/v1/catalog", 128L), Triple("POST", "/v1/session", 242L),
             Triple("GET", "/v1/products/1042", 85L), Triple("GET", "/v1/cart", 36L),
@@ -86,9 +87,9 @@ class WebsiteProductPreviewTest {
 }"""
         val devices = listOf("Pixel 8" to "8A41D2", "iPhone 15" to "F72C10").map { (name, id) ->
             DeviceWorkspaceEntry(RegisteredDevice(RegisteredDeviceId(id), name,
-                DeviceRegistrationKind.PAIRED_COMPANION, 1, 1), DevicePresenceStatus.CONNECTED)
+                DeviceRegistrationKind.PAIRED_COMPANION, 1, 1), if (artwork == ArtworkScene.MULTI_DEVICE && name == "iPhone 15") DevicePresenceStatus.OFFLINE else DevicePresenceStatus.CONNECTED)
         }
-        ImageComposeScene(1600, 960, Density(1.2f), content = { KNetTheme {
+        renderArtwork(artwork, listOf("Other traffic", "200 OK")) { KNetTheme {
             Column(Modifier.fillMaxSize().background(KNetTheme.colors.background)) {
                 DeviceWorkspaceTabs(DeviceWorkspaceState(devices = devices, source = TrafficSource.Device(devices.first().device.id)), {},
                     modifier = Modifier.fillMaxWidth().height(46.dp))
@@ -107,12 +108,7 @@ class WebsiteProductPreviewTest {
                     }
                 }
             }
-        } }).use { scene ->
-            repeat(6) { scene.render((it + 1L) * 1_000_000_000).close() }
-            val output = File(System.getProperty("knet.website.artwork"))
-            output.parentFile.mkdirs()
-            scene.render(7_000_000_000).use { image -> image.encodeToData()!!.use { data -> output.writeBytes(data.bytes) } }
-            assertTrue(output.length() > 10_000, "The real product render must not be empty")
+        } }
         }
     }
 }
