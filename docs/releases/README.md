@@ -1,6 +1,6 @@
 # Product release preparation
 
-Desktop 0.2.1 preparation is tracked in [`qualification-0.2.1.md`](qualification-0.2.1.md), with changes in
+Desktop 0.2.1 publication is recorded in [`qualification-0.2.1.md`](qualification-0.2.1.md), with changes in
 [`desktop-0.2.1.md`](desktop-0.2.1.md). Companion remains at 0.2.0 for this Desktop patch.
 
 Desktop and Companion use independent product-qualified tags. For the coordinated 0.2.0 release,
@@ -50,8 +50,8 @@ release tags remain immutable. Infrastructure-only failures can rerun the unchan
 After verification, publish each existing draft with `gh release edit TAG --draft=false --verify-tag`.
 Set the Companion release to `--latest=false`, then publish Desktop with `--latest` so the repository's
 single Latest marker identifies the desktop download. Verify both public release pages and assets.
-Public release publication requires the maintainer's authorization; the coordinated 0.2.0 release
-cycle was explicitly authorized in the active task.
+Public release publication requires the maintainer's authorization; the coordinated 0.2.0 release and
+Desktop 0.2.1 patch were explicitly authorized in their active tasks.
 
 ## Native qualification diagnostics
 
@@ -73,9 +73,16 @@ loop. Happy Eyeballs cleanup uses Netty's direct transport close for that unregi
 channel close once registered. A deterministic incompatible-event-loop regression verifies the race
 completes exceptionally without throwing from cleanup or retaining its connection deadline.
 
+## Published 0.2.1 evidence
+
+[Desktop 0.2.1](https://github.com/devuloopers/KNet/releases/tag/desktop-v0.2.1) is Latest, with 13 native
+packages and `SHA256SUMS`. Full CI, native packaging, provenance, package metadata and anonymous downloads
+passed. The [qualification report](qualification-0.2.1.md) records the exact source, workflows and manifest.
+Companion remains compatible at 0.2.0.
+
 ## Published 0.2.0 evidence
 
 The coordinated release is complete. [Desktop 0.2.0](https://github.com/devuloopers/KNet/releases/tag/desktop-v0.2.0)
-is Latest; [Companion 0.2.0](https://github.com/devuloopers/KNet/releases/tag/companion-v0.2.0) provides the
+remains available; [Companion 0.2.0](https://github.com/devuloopers/KNet/releases/tag/companion-v0.2.0) provides the
 signed Android APK. The [qualification report](qualification-0.2.0.md) records the verified source commit,
 workflow runs, repairs, payload/provenance checks and publication results.

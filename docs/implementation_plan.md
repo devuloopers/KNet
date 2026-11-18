@@ -1,11 +1,10 @@
 # KNet Implementation Plan
 
-## Desktop 0.2.1 release (2026-11-18) [IN PROGRESS]
+## Desktop 0.2.1 release (2026-11-18) [COMPLETED]
 
-Prepare and publish the user-authorized Desktop patch release through the existing `desktop-v0.2.1` workflow.
-Update Desktop metadata and release notes; Companion remains compatible at 0.2.0. Qualify the immutable source,
-build all native packages, inspect/checksum the draft assets, then publish and verify the public release.
-Keep published 0.2.0 tags/releases immutable and retain all CI/release gates.
+Published the user-authorized Desktop patch as `desktop-v0.2.1`, now GitHub's Latest release. All 13 native
+packages and the checksum manifest are public; anonymous download checks passed. Companion remains compatible
+at 0.2.0. Existing published 0.2.0 tags/releases were preserved and all CI/release gates remained enabled.
 
 Preparation found two scheduling-sensitive qualification fixtures: WebSocket echo/send-completion callback order
 and a 64-second load offering that left less than a minute after a valid late flow start. The former now verifies
@@ -14,6 +13,14 @@ bounds. Follow-up qualification separates tunnel setup from payload fairness tim
 use production-like serialized Main dispatch, and preserves intentional narrow-toolbar overflow for long profile
 names with enlarged Linux fonts. All original gates remain enabled. Obsolete unpublished release runs are
 cancelled before updating the new tag using an explicit remote-object lease.
+
+The published source `708d9773cb968bd1d4916861c83be3baaa3787ce` passed all eight Desktop release jobs and
+all ten CI jobs, including four desktop platforms, Android and iOS. The hosted feature reports contain 1,683
+passing cases; all three sustained
+I/O/memory cases passed. All 13 draft packages match the checksum manifest, signed provenance verifies against
+the tag/source/workflow, and the Windows archive contains version 0.2.1 with JetBrains Runtime 21.0.11.
+iOS Kotlin qualification and the unsigned Simulator app build passed. Publication and Latest verification
+passed after publication at `2026-11-18T15:26:57Z`; see the [qualification report](releases/qualification-0.2.1.md).
 
 ## Clear after restart and development presence diagnosis (2026-11-18) [COMPLETED — FIREWALL APPLY PENDING]
 

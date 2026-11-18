@@ -1,6 +1,6 @@
 # Desktop 0.2.1 release qualification
 
-Status: **IN PROGRESS — cross-platform qualification and native packaging.**
+Status: **COMPLETED — stable Desktop release is public, Latest and verified.**
 
 The user authorized creating and publishing this Desktop patch release. The canonical release tag is
 `desktop-v0.2.1`, following the repository's independent product-release workflow. Companion remains 0.2.0.
@@ -32,7 +32,7 @@ measured 99,982.5 bit/s over 64.011 seconds, with the last flow's first byte at 
 five-second bound); only 59.573 seconds remained after all flows started. The fixture now offers 72 seconds of
 payload, leaving more than a minute even at its existing 105 kbps upper-rate and five-second startup limits.
 Rate, startup, exact-byte/hash, EOF, queue, heap and direct-memory assertions remain enabled. The first draft
-workflow is cancelled before advancing the new unpublished tag with an explicit remote-object lease.
+workflow was cancelled before advancing the new unpublished tag with an explicit remote-object lease.
 
 The revised local gate passed all three cases: download measured 99,342.9 bit/s with a 71.518-second shared window;
 upload measured 99,960.7 bit/s with a 71.669-second shared window. The 500 MiB integrity and bounded-memory case
@@ -53,6 +53,44 @@ load cases and architecture checks also passed (`cross-platform-fixture-verifica
 99,971.1 bit/s with a 0.493-second last first byte, and upload 99,981.3 bit/s with a 1.643-second last first byte.
 Both shared transfer windows exceeded 70 seconds; the 500 MiB case retained integrity and memory checks.
 
-Pending complete CI, Desktop release qualification and all five packaging jobs on the final source commit.
-The workflow stages an unpublished draft with 13 packages, checksums and provenance. Publication will follow
-source/tag verification and asset inspection; the public release and Latest marker will then be checked.
+Full CI, Desktop release qualification and all five packaging jobs passed on the final source commit.
+The workflow staged an unpublished draft with 13 packages, checksums and provenance. Publication followed
+source/tag verification and asset inspection; anonymous download checks and the Latest marker passed afterward.
+
+## Final source and hosted evidence
+
+The published tag identifies `708d9773cb968bd1d4916861c83be3baaa3787ce`.
+[CI run 44330058614](https://github.com/devuloopers/KNet/actions/runs/44330058614) and
+[Desktop run 44330058664](https://github.com/devuloopers/KNet/actions/runs/44330058664) qualify that same commit.
+The feature evidence contains 356 JUnit suites with 1,683 tests, zero failures/errors and zero skips. The separate
+load gate passed all three cases: download 99,979.6 bit/s, upload 99,996.9 bit/s, with last first bytes at 0.637 and
+0.613 seconds respectively and shared windows exceeding 71 seconds. The 500 MiB case retained integrity and
+bounded-memory assertions. All eight Desktop release jobs passed, including qualification, five native package
+builds and draft staging. All ten CI jobs passed: architecture, protocol/editor, Network Conditions/Protected
+Traffic, sustained I/O/memory, Windows/Linux/Intel Mac/Apple Silicon desktop, Android and iOS. iOS qualification
+includes Kotlin/Native tests and the unsigned Debug Simulator application build.
+
+## Download verification
+
+The verified draft contained exactly 13 packages plus `SHA256SUMS`: macOS arm64/x64 DMG/ZIP, Windows x64 EXE/MSI/ZIP,
+and Linux arm64/x64 DEB/RPM/TAR.GZ. Every manifest entry matches GitHub's uploaded asset digest, with no missing
+or extra packages. The manifest SHA-256 is
+`72a2e0d47a4978ebe9c54b450820fea0bd49842538290fd5ea2e8359432a9430`.
+
+GitHub CLI verified the manifest's signed provenance against the exact source commit, canonical tag, Desktop
+release workflow and GitHub-hosted runner policy. The downloaded Windows ZIP matches its manifest entry and
+contains application version 0.2.1 in both compiled metadata and launcher configuration. Its bundled VM binary
+identifies JetBrains s.r.o., OpenJDK Platform 21.0.11, confirming JBR is packaged for native Windows captions.
+The jlinked runtime's reduced `release` file retains Java version/modules but omits the vendor field, so the
+verification uses the VM binary's version resource for vendor identity.
+
+## Publication record
+
+[Desktop 0.2.1](https://github.com/devuloopers/KNet/releases/tag/desktop-v0.2.1) was published at
+`2026-11-18T15:26:57Z`. GitHub's Latest endpoint identifies `desktop-v0.2.1`. The public release page and all
+14 download URLs (13 packages plus the manifest) returned HTTP 200 without authentication. The public manifest
+matches the verified SHA-256 above, and every public asset digest matches the inspected draft.
+
+The published tag remains immutable. Desktop/Companion 0.2.0 releases and tags were preserved. Companion remains
+at 0.2.0 and is compatible with this Desktop patch. Native macOS/Windows packages remain unsigned development
+distributions; no new physical-device or cross-monitor validation is inferred from hosted qualification.
