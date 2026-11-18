@@ -7,6 +7,11 @@ Update Desktop metadata and release notes; Companion remains compatible at 0.2.0
 build all native packages, inspect/checksum the draft assets, then publish and verify the public release.
 Keep published 0.2.0 tags/releases immutable and retain all CI/release gates.
 
+Preparation found two scheduling-sensitive qualification fixtures: WebSocket echo/send-completion callback order
+and a 64-second load offering that left less than a minute after a valid late flow start. The former now verifies
+both exact directional messages; the latter offers 72 seconds while retaining all rate/startup/integrity/memory
+bounds. Initial unpublished release runs are cancelled before updating the new tag using an explicit lease.
+
 ## Clear after restart and development presence diagnosis (2026-11-18) [COMPLETED — FIREWALL APPLY PENDING]
 
 The user's stopped desktop retained 24 records in an orphan ACTIVE session. Source Clear correctly avoided live

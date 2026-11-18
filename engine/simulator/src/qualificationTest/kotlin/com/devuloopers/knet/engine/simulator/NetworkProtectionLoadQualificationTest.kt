@@ -38,8 +38,9 @@ class NetworkProtectionLoadQualificationTest {
     }
 
     private fun qualifySustained(direction: Direction) {
-        // 64 seconds of offered payload leaves at least 60 seconds after every flow's first byte.
-        val result = transfer(bytesPerFlow = 200_000L, shaped = true, slowConsumer = false, direction = direction)
+        // Offer 72 seconds at the target rate. Even at the allowed 105 kbps upper bound and five-second
+        // flow-start margin, more than 60 seconds remain with every flow participating in the measurement.
+        val result = transfer(bytesPerFlow = 225_000L, shaped = true, slowConsumer = false, direction = direction)
         val bitsPerSecond = result.bytes * 8.0 / (result.elapsedNanos / 1_000_000_000.0)
         record(if (direction == Direction.UPLOAD) "sustained-upload-rate" else "sustained-rate", result)
         assertTrue(bitsPerSecond in 95_000.0..105_000.0,

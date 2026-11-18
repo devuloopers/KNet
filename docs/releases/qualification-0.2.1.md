@@ -27,6 +27,17 @@ exactly one outbound and inbound message with the expected text/bytes and unique
 Started/Completed checks. The interactive collector subscribes before sending. No production behavior or gate
 was disabled to address this scheduling-dependent assertion.
 
+The first versioned CI run also exposed insufficient offered duration in the sustained-load fixture. Upload
+measured 99,982.5 bit/s over 64.011 seconds, with the last flow's first byte at 4.438 seconds (inside the existing
+five-second bound); only 59.573 seconds remained after all flows started. The fixture now offers 72 seconds of
+payload, leaving more than a minute even at its existing 105 kbps upper-rate and five-second startup limits.
+Rate, startup, exact-byte/hash, EOF, queue, heap and direct-memory assertions remain enabled. The first draft
+workflow is cancelled before advancing the new unpublished tag with an explicit remote-object lease.
+
+The revised local gate passed all three cases: download measured 99,342.9 bit/s with a 71.518-second shared window;
+upload measured 99,960.7 bit/s with a 71.669-second shared window. The 500 MiB integrity and bounded-memory case
+also passed. Evidence: `build/release-0.2.1/load-window-verification.log` and the task's TSV/XML reports.
+
 Pending the versioned source commit, complete CI, Desktop release qualification and all five packaging jobs.
 The workflow stages an unpublished draft with 13 packages, checksums and provenance. Publication will follow
 source/tag verification and asset inspection; the public release and Latest marker will then be checked.
