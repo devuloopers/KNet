@@ -12,12 +12,14 @@ import kotlin.concurrent.thread
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -75,14 +77,7 @@ class WebSocketApiStudioExecutorTest {
             val events = withTimeout(5_000L) { executor.execute(command).take(4).toList() }
 
             assertIs<ApiStudioProtocolExecutionEvent.Started>(events[0])
-            assertEquals(
-                ApiStudioProtocolMessageDirection.OUTBOUND,
-                assertIs<ApiStudioProtocolExecutionEvent.Message>(events[1]).message.direction,
-            )
-            assertEquals(
-                ApiStudioProtocolMessageDirection.INBOUND,
-                assertIs<ApiStudioProtocolExecutionEvent.Message>(events[2]).message.direction,
-            )
+            assertEchoMessages(events.subList(1, 3))
             assertIs<ApiStudioProtocolExecutionEvent.Completed>(events[3])
             origin.join(1_000L)
         }
@@ -106,7 +101,7 @@ class WebSocketApiStudioExecutorTest {
             val session = executor.open(ApiStudioProtocolExecutionCommand(document)).getOrThrow()
 
             val events = coroutineScope {
-                val collected = async {
+                val collected = async(start = CoroutineStart.UNDISPATCHED) {
                     withTimeout(5_000L) { session.events.take(4).toList() }
                 }
                 session.send(ApiStudioProtocolOutboundMessage("hello", "text/plain")).getOrThrow()
@@ -115,17 +110,24 @@ class WebSocketApiStudioExecutorTest {
             }
 
             assertIs<ApiStudioProtocolExecutionEvent.Started>(events[0])
-            val outbound = assertIs<ApiStudioProtocolExecutionEvent.Message>(events[1]).message
-            assertEquals(ApiStudioProtocolMessageDirection.OUTBOUND, outbound.direction)
-            assertEquals("hello", outbound.displayText)
-            val inbound = assertIs<ApiStudioProtocolExecutionEvent.Message>(events[2]).message
-            assertEquals(ApiStudioProtocolMessageDirection.INBOUND, inbound.direction)
-            assertEquals("hello", inbound.displayText)
+            assertEchoMessages(events.subList(1, 3))
             val completed = assertIs<ApiStudioProtocolExecutionEvent.Completed>(events[3])
             assertEquals("1000", completed.statusCode)
             assertEquals("WebSocket", completed.actualProtocol)
             origin.join(1_000L)
         }
+    }
+
+    private fun assertEchoMessages(events: List<ApiStudioProtocolExecutionEvent>) {
+        // A fast echo may reach the receive callback before the send future's coroutine resumes. The two
+        // independent directions must each retain their exact message; their completion callback order is not fixed.
+        val messages = events.map { assertIs<ApiStudioProtocolExecutionEvent.Message>(it).message }
+        for (direction in listOf(ApiStudioProtocolMessageDirection.OUTBOUND, ApiStudioProtocolMessageDirection.INBOUND)) {
+            val message = messages.single { it.direction == direction }
+            assertEquals("hello", message.displayText)
+            assertContentEquals("hello".encodeToByteArray(), message.copyPayload())
+        }
+        assertEquals(listOf(1L, 2L), messages.map { it.sequence }.sorted())
     }
 
     private fun startEchoOrigin(server: ServerSocket) =

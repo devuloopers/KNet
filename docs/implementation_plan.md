@@ -1,5 +1,12 @@
 # KNet Implementation Plan
 
+## Desktop 0.2.1 release (2026-11-18) [IN PROGRESS]
+
+Prepare and publish the user-authorized Desktop patch release through the existing `desktop-v0.2.1` workflow.
+Update Desktop metadata and release notes; Companion remains compatible at 0.2.0. Qualify the immutable source,
+build all native packages, inspect/checksum the draft assets, then publish and verify the public release.
+Keep published 0.2.0 tags/releases immutable and retain all CI/release gates.
+
 ## Clear after restart and development presence diagnosis (2026-11-18) [COMPLETED — FIREWALL APPLY PENDING]
 
 The user's stopped desktop retained 24 records in an orphan ACTIVE session. Source Clear correctly avoided live

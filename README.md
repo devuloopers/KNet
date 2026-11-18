@@ -395,8 +395,8 @@ release remains unchanged; subsequent releases use product-qualified tags:
 
 ```bash
 # Desktop release
-git tag -a desktop-v0.2.0 -m 'KNet Desktop 0.2.0'
-git push origin desktop-v0.2.0
+git tag -a desktop-v0.2.1 -m 'KNet Desktop 0.2.1'
+git push origin desktop-v0.2.1
 
 # Android/iOS companion release
 git tag -a companion-v0.2.0 -m 'KNet Companion 0.2.0'

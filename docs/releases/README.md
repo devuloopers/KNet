@@ -1,5 +1,8 @@
 # Product release preparation
 
+Desktop 0.2.1 preparation is tracked in [`qualification-0.2.1.md`](qualification-0.2.1.md), with changes in
+[`desktop-0.2.1.md`](desktop-0.2.1.md). Companion remains at 0.2.0 for this Desktop patch.
+
 Desktop and Companion use independent product-qualified tags. For the coordinated 0.2.0 release,
 `desktop-v0.2.0` and `companion-v0.2.0` identify the same verified source commit. Product versions
 are independent from the Companion control-envelope protocol version.

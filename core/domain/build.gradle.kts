@@ -38,7 +38,7 @@ kotlin {
 val generateAppMetadata by tasks.registering {
     val outputDir = layout.buildDirectory.dir("generated/metadata/kotlin")
     val appName = providers.gradleProperty("knet.app.name").getOrElse("KNet")
-    val appVersion = providers.gradleProperty("knet.desktop.version").getOrElse("0.2.0")
+    val appVersion = providers.gradleProperty("knet.desktop.version").getOrElse("0.2.1")
     val appDescription = providers.gradleProperty("knet.app.description").getOrElse("Network Inspector & API Studio")
     val appSuiteName = providers.gradleProperty("knet.app.suiteName").getOrElse("Developer Suite")
     val appPackageId = providers.gradleProperty("knet.app.packageId").getOrElse("com.devuloopers.knet")
