@@ -35,7 +35,7 @@ import com.devuloopers.knet.ui.core.foundation.clipboard.setPlainText
 /**
  * Top-level Live Traffic Workspace Screen composable bound strictly to :ui:core design tokens and parameter objects.
  * @param throughputIndicator Shell-composed actual throughput display; Traffic owns placement, not measurements.
- * @param onClearFeed Optional shell routing for device presence and offline-close confirmation.
+ * @param onClearFeed Optional shell routing to retain the selected workspace during traffic deletion.
  * @param onImportCapture Opens the app-wide intake dialog without replacing this workspace.
  */
 @Composable

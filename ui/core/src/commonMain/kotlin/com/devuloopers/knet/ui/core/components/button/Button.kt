@@ -135,7 +135,7 @@ fun KNetButton(
                 modifier = Modifier
                     .fillMaxHeight()
                     .wrapContentWidth()
-                    .padding(horizontal = KNetTheme.spacing.md),
+                    .padding(horizontal = ButtonDefaults.horizontalPadding),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {

@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.use
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownDefaults
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownSize
 import com.devuloopers.knet.ui.core.foundation.motion.Motion
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import java.awt.EventQueue
@@ -24,6 +25,63 @@ import kotlin.test.*
 @OptIn(ExperimentalComposeUiApi::class)
 class SharedDropdownSizingTest {
     private var frameNanos = 0L
+
+    @Test
+    fun `selected popup option fits its pixel budget at fractional display scales`() = EventQueue.invokeAndWait {
+        val label = "Streaming 100 kbps"
+        for (scale in listOf(1f, 1.25f, 1.5f, 1.75f, 2f)) {
+            ImageComposeScene((900 * scale).toInt(), (500 * scale).toInt(), Density(scale), content = {
+                KNetTheme(motion = Motion(animationsEnabled = false)) {
+                    KNetDropdown(label, listOf("Smart", label), {})
+                }
+            }).use { scene ->
+                scene.frame()
+                val anchor = scene.nodes().single { it.config.getOrNull(SemanticsProperties.StateDescription) == "Collapsed" }
+                assertTrue(assertNotNull(anchor.config.getOrNull(SemanticsActions.OnClick)?.action).invoke())
+                scene.frame()
+                val option = scene.nodes().single { it.config.getOrNull(SemanticsProperties.Selected) == true }
+                val layouts = descendants(option).flatMap { node ->
+                    mutableListOf<TextLayoutResult>().also {
+                        node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action?.invoke(it)
+                    }
+                }.filter { it.layoutInput.text.text == label }
+                assertTrue(layouts.isNotEmpty())
+                assertFalse(layouts.any { it.isLineEllipsized(0) || it.multiParagraph.maxIntrinsicWidth > it.size.width },
+                    "Selected popup option must fit at display scale $scale")
+            }
+        }
+    }
+
+    @Test
+    fun `automatic labels fit at fractional display scales in every size and alignment`() = EventQueue.invokeAndWait {
+        for (scale in listOf(1f, 1.25f, 1.5f, 1.75f, 2f)) for (fontScale in listOf(1f, 1.25f)) {
+            val selected = mutableStateOf("Smart")
+            ImageComposeScene((900 * scale).toInt(), (500 * scale).toInt(), Density(scale, fontScale), content = {
+                KNetTheme(motion = Motion(animationsEnabled = false)) {
+                    Column {
+                        for (size in KNetDropdownSize.entries) for (centered in listOf(false, true)) {
+                            KNetDropdown(selected.value, listOf("Smart", "Manual", "Streaming 100 kbps"), {},
+                                size = size, centeredAnchorContent = centered)
+                        }
+                    }
+                }
+            }).use { scene ->
+                for (label in listOf("Smart", "Manual", "Streaming 100 kbps")) {
+                    selected.value = label
+                    scene.frame()
+                    val layouts = scene.nodes().flatMap { node ->
+                        mutableListOf<TextLayoutResult>().also {
+                            node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action?.invoke(it)
+                        }
+                    }.filter { it.layoutInput.text.text == label }
+                    assertEquals(6, layouts.size)
+                    assertFalse(layouts.any { it.isLineEllipsized(0) || it.multiParagraph.maxIntrinsicWidth > it.size.width },
+                        "Automatic label '$label' must fit at display scale $scale and font scale $fontScale: " +
+                            layouts.map { "${it.size}, intrinsic=${it.multiParagraph.maxIntrinsicWidth}, ellipsis=${it.isLineEllipsized(0)}" })
+                }
+            }
+        }
+    }
 
     @Test
     fun `shared defaults fit the selected label while explicit form widths remain authoritative`() = EventQueue.invokeAndWait {
@@ -56,6 +114,13 @@ class SharedDropdownSizingTest {
             selected.value = veryLong
             scene.frame()
             assertEquals(KNetDropdownDefaults.MaximumWidth.value, scene.width("automatic"))
+            val longLabelLayouts = scene.nodes().flatMap { node ->
+                mutableListOf<TextLayoutResult>().also {
+                    node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action?.invoke(it)
+                }
+            }.filter { it.layoutInput.text.text == veryLong }
+            assertTrue(longLabelLayouts.any { it.isLineEllipsized(0) || it.multiParagraph.maxIntrinsicWidth > it.size.width },
+                "Genuinely long values must retain the shared bounded-overflow behavior")
             assertEquals(fixed, scene.width("fixed"))
             assertEquals(form, scene.width("form"))
             selected.value = "Off"

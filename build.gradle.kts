@@ -793,8 +793,6 @@ val verifyKotlinFirstSources by tasks.registering(VerifyKotlinFirstSourcesTask::
             "ui/core/src/jvmMain/kotlin/com/devuloopers/knet/ui/core/foundation/clipboard/ClipboardText.jvm.kt",
             // Native desktop file transfers are decoded only in this design-system platform adapter.
             "ui/core/src/jvmMain/kotlin/com/devuloopers/knet/ui/core/foundation/drop/NativeFileDrop.jvm.kt",
-            // Toolkit is used only for native window events in this product/platform adapter.
-            "products/desktop/src/jvmMain/kotlin/com/devuloopers/knet/products/desktop/window/MacDeviceTitleBar.kt",
         ),
     )
 }

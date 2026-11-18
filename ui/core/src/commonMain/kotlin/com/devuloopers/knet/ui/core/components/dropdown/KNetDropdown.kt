@@ -76,6 +76,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -90,6 +91,7 @@ import com.devuloopers.knet.ui.core.components.tooltip.KNetTooltipHost
 import com.devuloopers.knet.ui.core.components.tooltip.KNetTooltipPlacement
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.dimensions.KNetDimensions
+import com.devuloopers.knet.ui.core.foundation.dimensions.measuredControlWidth
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import kotlin.math.roundToInt
 
@@ -146,17 +148,18 @@ object KNetDropdownDefaults {
     /**
      * Resolves a bounded dropdown width from the measured anchor label.
      *
-     * Includes label padding and chevron chrome; the same bounds apply to every single-select anchor.
+     * Includes independently pixel-rounded label padding and chevron chrome; the same bounds apply to every
+     * single-select anchor. [widestLabelWidthPx] is the measured label width and [density] is its display density.
      */
-    fun contentWidth(widestLabelWidth: Dp, size: KNetDropdownSize): Dp {
-        val anchorChrome = HorizontalPadding + AnchorContentSpacing + chevronWidth(size)
-        return (widestLabelWidth + anchorChrome).coerceIn(MinimumWidth, MaximumWidth)
+    fun contentWidth(widestLabelWidthPx: Int, size: KNetDropdownSize, density: Density): Dp {
+        return density.measuredControlWidth(widestLabelWidthPx, listOf(HorizontalPadding, AnchorContentSpacing, chevronWidth(size)))
+            .coerceIn(MinimumWidth, MaximumWidth)
     }
 
-    /** Resolves the menu width required by the widest option plus its selected-row indicator chrome. */
-    fun menuContentWidth(widestLabelWidth: Dp): Dp {
-        val menuChrome = HorizontalPadding * 2 + ItemContentSpacing + SelectionIndicatorSize
-        return maxOf(MinimumWidth, widestLabelWidth + menuChrome)
+    /** Resolves [widestLabelWidthPx] plus independently rounded selected-row chrome at [density]. */
+    fun menuContentWidth(widestLabelWidthPx: Int, density: Density): Dp {
+        return maxOf(MinimumWidth, density.measuredControlWidth(widestLabelWidthPx,
+            listOf(HorizontalPadding, HorizontalPadding, ItemContentSpacing, SelectionIndicatorSize)))
     }
 }
 
@@ -268,11 +271,13 @@ fun <T> KNetDropdown(
         }
     }
     val contentResponsiveAnchorWidth = KNetDropdownDefaults.contentWidth(
-        widestLabelWidth = with(density) { measuredAnchorLabelWidthPx.toDp() },
-        size = size
+        widestLabelWidthPx = measuredAnchorLabelWidthPx,
+        size = size,
+        density = density,
     )
     val contentResponsiveMenuWidth = KNetDropdownDefaults.menuContentWidth(
-        widestLabelWidth = with(density) { widestMenuLabelWidthPx.toDp() }
+        widestLabelWidthPx = widestMenuLabelWidthPx,
+        density = density,
     )
     val widthAnimationDuration = if (motion.animationsEnabled) motion.durationFast else motion.durationInstant
     val animatedAnchorWidth by animateDpAsState(

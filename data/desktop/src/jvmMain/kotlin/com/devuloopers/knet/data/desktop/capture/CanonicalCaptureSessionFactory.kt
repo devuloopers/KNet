@@ -72,8 +72,13 @@ class CanonicalCaptureSessionFactory(
         limits = limits,
     )
 
-    /** Runs process-start recovery once so live session rotation cannot terminalize the old writer. */
-    private suspend fun recoverStartupStateOnce(recoveredAtEpochMillis: Long) {
+    /**
+     * Recovers abandoned capture state once at startup or before Clear/the first writer.
+     * Shared serialization with [openStreamingProxy] prevents recovery from terminalizing a live writer.
+     *
+     * @param recoveredAtEpochMillis Recovery time; defaults to the current wall clock.
+     */
+    suspend fun recoverStartupStateOnce(recoveredAtEpochMillis: Long = Clock.System.now().toEpochMilliseconds()) {
         startupRecoveryMutex.withLock {
             if (startupRecoveryComplete) return
             CanonicalStartupRecovery(

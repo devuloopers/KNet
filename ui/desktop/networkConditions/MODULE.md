@@ -19,7 +19,9 @@ Owns desktop presentation for configuring and observing Network Conditions.
 - A reusable global-control popover for the Traffic toolbar, using the same configuration/ViewModel, atomic
   profile activation, saved-profile selection, master bypass, error presentation, and full-screen navigation action.
   Its anchor measures the displayed label and animates width with KNet motion within the host's bounds; unselected
-  labels do not reserve width, and reduced-motion settings apply immediate size changes.
+  labels do not reserve width, and reduced-motion settings apply immediate size changes. UI core's measured-width
+  helper sums each independently rounded icon, gap and ButtonDefaults padding inset with measured text pixels,
+  preserving complete short labels at fractional display scaling.
 - Shared global-profile presentation offers one No throttling choice for both saved null and built-in
   no-throttling defaults, without rewriting stored IDs during rendering. The workspace and Traffic popover use
   the same options/selection mapping and read the display name from the profile catalog. Rule/profile lists

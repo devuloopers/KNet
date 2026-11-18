@@ -1,13 +1,16 @@
 package com.devuloopers.knet.products.desktop.bootstrap
 
-import com.devuloopers.knet.products.desktop.window.MacDeviceTitleBar
+import com.devuloopers.knet.products.desktop.window.NativeDeviceTitleBar
+import com.devuloopers.knet.products.desktop.window.initialDesktopWindowBounds
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.size
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
@@ -197,6 +200,9 @@ object DesktopBootstrap {
         koin.get<com.devuloopers.knet.data.desktop.capture.BodyDeletionWorker>().start(policyScope)
         policyScope.launch {
             try {
+                // Recovery belongs to startup, not to the user's next Start Capture click. The factory shares
+                // this once-only gate with capture startup and Clear, so these operations can safely overlap.
+                koin.get<com.devuloopers.knet.data.desktop.capture.CanonicalCaptureSessionFactory>().recoverStartupStateOnce()
                 val settings = koin.get<ObserveApplicationSettingsUseCase>().execute().first()
                 if (settings.autoClearTrafficOnStartup) {
                     koin.get<ClearTrafficHistoryUseCase>().execute()
@@ -213,7 +219,11 @@ object DesktopBootstrap {
 
     private fun launchDesktopApplication() {
         application {
-            val windowState = rememberWindowState()
+            val initialBounds = remember { initialDesktopWindowBounds() }
+            val windowState = rememberWindowState(
+                position = WindowPosition.Absolute(initialBounds.left, initialBounds.top),
+                size = initialBounds.size,
+            )
             Window(
                 onCloseRequest = {
                     ApplicationLifecycle.shutdownAsync()
@@ -225,8 +235,10 @@ object DesktopBootstrap {
             ) {
                 KNetApplicationTheme {
                     WindowBackgroundFlashingWorkaround(themeBackground = KNetTheme.colors.background)
-                    MacDeviceTitleBar { inset, regions ->
-                        MainWindow(titleBarInsetStart = inset, onTitleBarInteractiveBoundsChanged = regions)
+                    NativeDeviceTitleBar {
+                        MainWindow(titleBarInsetStart = insetStart, titleBarInsetEnd = insetEnd,
+                            onTitleBarInteractiveBoundsChanged = onInteractiveBoundsChanged,
+                            titleBarWrapper = { content -> TitleBar(content) })
                     }
                 }
             }

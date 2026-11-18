@@ -34,7 +34,7 @@ iOS packet shaping remains unavailable. Its extension acknowledges enabled packe
 | Speed clock | One selected-source subscriber at one-second cadence while Traffic is visible |
 | Scoped deletion | 128-record batches, transactional outbox, retained sibling/body references preserved |
 | Storage migration | 36 to 37 adds ingress/client/connection index without deleting history |
-| macOS title bar | Native JBR controls and hit testing; other/unsupported runtimes preserve system decoration |
+| macOS/Windows title bar | Native JBR controls and hit testing; Linux/unsupported runtimes preserve system decoration; Windows evidence is in `windows_title_bar.md` |
 
 Traffic footer rates measure actual proxy socket bytes, including HTTP/TLS framing. They continue independently of capture pause and row filters. The Network Conditions graph retains its existing payload-meter basis. Neither is a whole-device operating-system speed measurement.
 
@@ -121,13 +121,15 @@ The desktop control gate excludes eight existing Wi-Fi socket fixtures which exp
 
 Eligibility is independent of current search/type/status filters and payload byte counts. Connected devices
 are visible even when empty. Reconnecting devices remain during the existing presence lease grace period.
-Offline devices are visible only while at least one local HTTP exchange or opaque flow remains. Other traffic
+Device tabs are retained independently of local traffic, including across restarts. Existing offline history
+also makes its device visible, preserving tabs from before explicit tab retention was introduced. Other traffic
 is always available. Revoked identities cannot appear online, but their retained history remains selectable.
 
-Offline tab Close and toolbar Clear use one confirmation, showing the device name and unique identity suffix.
-Confirmation targets that identity's complete local traffic, without deleting pairing or sibling history.
-Connected Close is disabled with hover help; connected Clear deletes local history and keeps the tab. If the
-device reconnects while confirmation is open, the dialog explains that its tab will remain. New traffic arriving
+Toolbar Clear removes the selected source's complete local traffic and keeps its tab. Offline tab Close asks
+for confirmation showing the device name and unique identity suffix; after successful deletion it closes that
+tab without deleting pairing or sibling history. If deletion fails the tab stays open and an error is shown.
+Connected Close is disabled with hover help. If the device reconnects while confirmation or deletion is in
+progress, its tab remains visible even if it disconnects again before Close completes. New traffic arriving
 after the capture-clear boundary remains visible. Closing a background tab never selects or reloads it, and
 removing the selected offline tab falls back to Other without later focus stealing.
 
@@ -135,12 +137,43 @@ removing the selected offline tab falls back to Other without later focus steali
 |---|---|
 | Online empty, reconnect grace, offline empty/history, revocation, stable order, heartbeat suppression | `ObserveDeviceWorkspacesUseCaseTest` |
 | HTTP and zero-byte TLS membership, multiple sessions/connections, spoofed/blank identities, reactive deletion, pairing/sibling retention | `CanonicalTrafficHistoryQueryTest` |
-| Shared Clear/Close confirmation, cancellation, exact background target, repeat actions, reconnect during confirmation, selection fallback | `DeviceWorkspaceViewModelTest` |
+| Separate Clear/Close behavior, cancellation, exact background target, reconnect followed by disconnect during confirmation/deletion, failure/retry, selection fallback | `DeviceWorkspaceViewModelTest` |
 | Independent accessible Close action, disabled online help, background selection unchanged, native interactive bounds, compact overflow | `DeviceWorkspacePresentationTest` |
 | Explicit-source deletion, filtered-out history, duplicate-click guard, sibling table not reloaded, stale cache discarded, failure/retry | `TrafficPagingViewModelTest` |
+| Desktop DI, real Room deletion and DataStore tab retention; Clear keeps selection, Close falls back, sibling traffic/pairing survive | `DeviceWorkspaceClearCloseEndToEndTest` |
+| Empty-tab retention and individual Close remain saved after reopening preferences | `DataStoreSettingsIsolationTest` |
+
+The Windows recheck on 2026-11-18 passed the desktop composition integration test, the full 42-case app-shell
+suite, targeted application/Traffic/data tests and all six architecture checks. The transient reconnect case
+failed before the fix and passed afterward. Integration data lived in temporary stores; no Clear or Close was
+performed against the user's profile. Logs: `build/workspace-clear-close-verification.log`,
+`build/workspace-reconnect-regression.log`, `build/workspace-reconnect-fix.log` and
+`build/workspace-clear-close-final.log`.
+
+The subsequent physical report exposed a missing restart case: the stopped desktop's 24 saved records all
+belonged to an interrupted session still marked ACTIVE. Recovery previously waited for Start Capture, so
+terminal-only Clear skipped them and Close retained the tab through its remaining history. Recovery now runs
+through the same once-only factory gate at process startup and before Clear, including a stopped runtime that
+has never opened a writer. The gate cannot recover a new live writer during later rotation. Clear also ignores
+Close shell state and delayed roster membership. The expanded product test covers closed history, interrupted
+history, connected presence with capture stopped, and direct Close without a preceding Clear.
+
+Presence was diagnosed separately: the development desktop had listening Companion ports but no authenticated
+phone connection. Its JBR allow rules covered Public networks; the active LAN was Private, and its development
+Private rule still named the old Azul executable. The [development firewall helper](../tools/development/README.md)
+previews/applies the correct runtime-specific Private/LocalSubnet rule from an Administrator PowerShell.
+Android's VPN switch alone is not evidence of an active authenticated desktop control channel.
+
+The follow-up passed 137 tests across product (27), application (9), app shell (46), Traffic (39) and data (16),
+with zero failures/errors/skips. This includes real socket Clear/next-exchange and authenticated device/control
+sessions. Desktop compilation and all six architecture checks passed. Logs are
+`build/workspace-clear-presence-qualification.log` and `build/workspace-clear-live-socket-verification.log`;
+`build/workspace-interrupted-clear-reproduction.log` records the failing pre-fix restart case. The firewall helper
+was previewed only; applying it requires an Administrator PowerShell and subsequent physical phone reconnection.
 
 Physical follow-up: with two devices, Clear an online tab and verify new traffic resumes; disconnect one device,
-clear/close it after confirming, cancel once to verify no deletion, then reconnect while a confirmation is open.
+Clear its traffic and verify the tab remains, then close it after confirming, cancel once to verify no deletion,
+and reconnect while a confirmation is open.
 Verify the connected tab remains and pairing does not require a new QR scan. Check macOS blank-space dragging
 and keyboard/pointer activation of the new Close button in the packaged desktop app.
 

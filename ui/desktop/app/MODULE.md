@@ -36,7 +36,13 @@ global toolbar has no theme selector or theme callbacks. Host appearance does no
 
 The device workspace ViewModel consumes application use cases only. It combines durable names with current presence, persists selection and owns one selected-source speed subscriber while Traffic is visible.
 
-Offline tabs with retained traffic expose Close and share the toolbar Clear confirmation. The target identity is captured independently of selection; cancellation is non-destructive, and reconnecting during confirmation keeps the tab. Connected Close is disabled with hover help. Hidden selected tabs fall back to Other traffic without stealing focus on later reconnect. Pairing remains saved.
+Device tab visibility is retained independently from captured traffic. Toolbar Clear retains the selected tab;
+it does not depend on presence, roster timing or pending Close state. Traffic owns its duplicate-clear guard.
+Offline Close removes the tab only after its scoped traffic deletion succeeds. A reconnect observed during
+confirmation or deletion keeps the tab visible even if the device disconnects again before completion. Close
+failures are surfaced from the shell even when Traffic is not selected and release the operation for retry.
+
+Offline tabs expose Close with its own confirmation. The target identity is captured independently of selection; cancellation is non-destructive, and reconnecting during confirmation keeps the tab. Connected Close is disabled with hover help. Hidden selected tabs fall back to Other traffic without stealing focus on later reconnect. Pairing remains saved.
 
 Device tab presentation separates the existing display name and unique identity suffix for compact-tab styling. Source keys, roster visibility, status, selection and Close/Clear callbacks retain their existing behavior.
 

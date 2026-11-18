@@ -33,6 +33,7 @@ fun MainWindow(
     modifier: Modifier = Modifier,
     onTitleBarInteractiveBoundsChanged: (List<androidx.compose.ui.geometry.Rect>) -> Unit = {},
     titleBarInsetStart: Dp = 0.dp,
+    titleBarInsetEnd: Dp = 0.dp,
     titleBarWrapper: @Composable (@Composable () -> Unit) -> Unit = { content -> content() },
 ) {
     val destination by appState.navigationController.currentDestination.collectAsState()
@@ -55,7 +56,7 @@ fun MainWindow(
             { appState.navigationController.navigate(it) }, modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 titleBarWrapper { DeviceWorkspaceTabs(devices.copy(pendingCounts = pendingCounts), { source -> traffic.selectSource(source); deviceWorkspaces.select(source) },
-                    Modifier.fillMaxWidth().padding(start = titleBarInsetStart), onTitleBarInteractiveBoundsChanged,
+                    Modifier.fillMaxWidth().padding(start = titleBarInsetStart, end = titleBarInsetEnd), onTitleBarInteractiveBoundsChanged,
                     onClose = { id -> if (!trafficClearing) deviceWorkspaces.requestClose(id) },
                     closeInProgress = trafficClearing) }
                 KNetApplicationScaffold(
@@ -82,7 +83,9 @@ fun MainWindow(
                         onNavigateToDestination = { appState.navigationController.navigate(it) },
                         onClearTraffic = {
                             if (!traffic.uiState.value.isClearingHistory) {
-                                deviceWorkspaces.requestClear(traffic.uiState.value.source)?.let(traffic::clearSource)
+                                deviceWorkspaces.requestClear(traffic.uiState.value.source)?.let { source ->
+                                    traffic.clearSource(source, beforeClear = { deviceWorkspaces.retainForClear(source) })
+                                }
                             }
                         },
                     )
@@ -92,15 +95,25 @@ fun MainWindow(
                 val connected = devices.devices.any { entry ->
                     entry.device.id == pending.source.id && entry.status != DevicePresenceStatus.OFFLINE
                 }
+                val keepOpen = connected || pending.hasReconnected
                 ConfirmDialog(
-                    title = if (connected) "Clear this device's traffic?" else "Clear traffic and close this tab?",
+                    title = if (keepOpen) "Clear this device's traffic?" else "Clear traffic and close this tab?",
                     message = "Remove all locally saved traffic for ${pending.deviceLabel}, including traffic hidden by filters. " +
                         "Its pairing will remain saved." +
-                        if (connected) " The device is connected, so its tab will remain visible." else "",
-                    confirmText = if (connected) "Clear traffic" else "Clear and close",
-                    onConfirm = { deviceWorkspaces.confirmClear()?.let(traffic::clearSource) },
+                        if (connected) " The device is connected, so its tab will remain visible."
+                        else if (pending.hasReconnected) " The device reconnected, so its tab will remain visible." else "",
+                    confirmText = if (keepOpen) "Clear traffic" else "Clear and close",
+                    onConfirm = { deviceWorkspaces.confirmClear()?.let { source ->
+                        traffic.clearSource(source, beforeClear = { deviceWorkspaces.retainForClear(source) },
+                            afterClear = { deviceWorkspaces.finishClose(source) }, onFailure = deviceWorkspaces::closeFailed)
+                    } },
                     onDismissRequest = deviceWorkspaces::dismissClear,
                 )
+            }
+            devices.closeError?.let { message ->
+                ConfirmDialog(title = "Could not close workspace", message = message,
+                    confirmText = "OK", onConfirm = deviceWorkspaces::dismissCloseError,
+                    onDismissRequest = deviceWorkspaces::dismissCloseError)
             }
         }
     }

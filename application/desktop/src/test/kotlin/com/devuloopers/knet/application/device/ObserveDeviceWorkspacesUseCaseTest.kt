@@ -4,6 +4,7 @@ import com.devuloopers.knet.application.contract.device.*
 import com.devuloopers.knet.application.contract.pairing.RegisteredDeviceStore
 import com.devuloopers.knet.application.usecase.device.ObserveDeviceWorkspacesUseCase
 import com.devuloopers.knet.identity.*
+import com.devuloopers.knet.application.contract.traffic.TrafficSource
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
@@ -12,7 +13,7 @@ import kotlin.test.*
 /** Tab membership uses canonical history and authenticated presence, never filtered page contents. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ObserveDeviceWorkspacesUseCaseTest {
-    @Test fun `only online grace period or retained history qualify and revocation cannot imply online`() = runTest {
+    @Test fun `presence history and retained tabs qualify while revocation cannot imply online`() = runTest {
         val devices = (1..5).map { index ->
             RegisteredDevice(RegisteredDeviceId("device-$index"), "Same name", DeviceRegistrationKind.PAIRED_COMPANION,
                 index.toLong(), index.toLong(), revokedAtEpochMillis = if (index == 5) 10L else null)
@@ -32,10 +33,18 @@ class ObserveDeviceWorkspacesUseCaseTest {
         val presence = object : DevicePresenceReader { override val presence = observed }
         val retained = MutableStateFlow(setOf(devices[2].id, RegisteredDeviceId("unknown")))
         val history = object : DeviceTrafficHistory { override fun observeDeviceIdsWithTraffic() = retained }
+        val preferences = object : DeviceWorkspacePreferences {
+            override val selectedSource = MutableStateFlow<TrafficSource>(TrafficSource.Other)
+            override suspend fun select(source: TrafficSource) { selectedSource.value = source }
+            override val openDevices = MutableStateFlow<Set<RegisteredDeviceId>>(emptySet())
+            override suspend fun setOpen(id: RegisteredDeviceId, open: Boolean) {
+                openDevices.value = if (open) openDevices.value + id else openDevices.value - id
+            }
+        }
         var latest = emptyList<DeviceWorkspaceEntry>()
         var emissions = 0
         backgroundScope.launch {
-            ObserveDeviceWorkspacesUseCase(registry, presence, history).execute().collect { entries ->
+            ObserveDeviceWorkspacesUseCase(registry, presence, history, preferences).execute().collect { entries ->
                 latest = entries; emissions++
             }
         }
@@ -53,6 +62,9 @@ class ObserveDeviceWorkspacesUseCaseTest {
         runCurrent()
         assertEquals(devices.take(2).map { device -> device.id }, latest.map { entry -> entry.device.id })
         observed.value = emptyMap()
+        runCurrent()
+        assertEquals(devices.take(2).map { it.id }, latest.map { it.device.id }, "Previously connected tabs remain open")
+        preferences.openDevices.value = emptySet()
         runCurrent()
         assertTrue(latest.isEmpty())
         retained.value = setOf(devices[3].id)

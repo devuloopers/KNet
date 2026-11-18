@@ -200,7 +200,8 @@ class TrafficViewModel(
      * The target never follows selection changes; duplicate clicks during deletion are ignored.
      * Storage owns capture rotation and full-history deletion, independent of the active search filters.
      */
-    fun clearSource(clearedSource: TrafficSource) {
+    fun clearSource(clearedSource: TrafficSource, beforeClear: suspend () -> Unit = {},
+        afterClear: suspend () -> Unit = {}, onFailure: () -> Unit = {}) {
         if (_uiState.value.isClearingHistory) return
         clearingSource = clearedSource
         if (clearedSource == TrafficSource.All || _uiState.value.source == clearedSource) {
@@ -210,6 +211,7 @@ class TrafficViewModel(
         _uiState.update { state -> state.copy(isClearingHistory = true, trafficErrorMessage = null) }
         viewModelScope.launch {
             try {
+                beforeClear()
                 clearTrafficHistoryUseCase.execute(clearedSource)
                 if (clearedSource == TrafficSource.All) {
                     sourceReadings.clear()
@@ -252,9 +254,11 @@ class TrafficViewModel(
                     publishTrafficProjection()
                     loadTrafficPage(TrafficPageLoadMode.REPLACE, allowDuringClear = true)
                 }
+                afterClear()
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                onFailure()
                 KNetLogger.error("TrafficViewModel", error) { "Traffic history clear failed." }
                 _uiState.update { state ->
                     state.copy(trafficErrorMessage = "Traffic history could not be cleared.")

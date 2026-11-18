@@ -44,6 +44,10 @@ data class ButtonColors(
 
 /** Theme-aware sizing and color defaults for [KNetButton]. */
 object ButtonDefaults {
+    /** Per-side content inset shared by button layout and intrinsic-width consumers. */
+    val horizontalPadding: Dp
+        @Composable get() = KNetTheme.spacing.md
+
     /** Resolves a complete color set for [variant]. */
     @Composable
     fun colors(variant: ButtonVariant = ButtonVariant.Primary): ButtonColors {

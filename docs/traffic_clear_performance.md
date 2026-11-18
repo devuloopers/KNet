@@ -20,6 +20,25 @@ Traffic suppresses redundant page/count/facet reads for the source being cleared
 results and performs one explicit post-commit refresh, including replacement-session traffic. Sibling workspaces
 remain readable during a background source clear. This avoids hiding history before its deletion is durable.
 
+## Clear before capture starts after a restart (2026-11-18)
+
+An interrupted process can leave its saved session ACTIVE even though the newly launched runtime is Stopped.
+Recovery previously waited for the next Start Capture, so terminal-only Clear could silently leave all of those
+rows behind. The factory's once-only recovery gate now runs at desktop startup and before Clear as well as before
+the first writer. Its shared mutex prevents startup, Clear and first capture from racing; subsequent live writer
+rotation never repeats recovery. The terminal-session deletion guard remains in place.
+
+Real desktop composition regressions cover closed and interrupted sessions, Online presence while capture is
+stopped, and confirmed Close before an earlier Clear. Toolbar Clear ignores device presence, delayed roster
+membership and Close shell state. Its only operation guard prevents duplicate concurrent deletion. Tests use
+temporary Room and DataStore files and preserve pairing, sibling records and the empty workspace after Clear.
+
+All 137 follow-up cases passed, including real socket Clear/next-exchange, source admission/rotation and
+authenticated Companion control sessions. Desktop compilation and all six architecture checks passed. Evidence:
+`build/workspace-interrupted-clear-reproduction.log`, `build/workspace-clear-presence-qualification.log` and
+`build/workspace-clear-live-socket-verification.log`. The user's database was inspected read-only; no Clear was
+performed on their captured traffic during verification.
+
 ## Schema v38
 
 The additive 37-to-38 migration preserves capture, policies, credentials and pending cleanup:

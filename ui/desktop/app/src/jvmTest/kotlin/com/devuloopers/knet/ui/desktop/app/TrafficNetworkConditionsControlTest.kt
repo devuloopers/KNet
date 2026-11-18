@@ -3,6 +3,7 @@ package com.devuloopers.knet.ui.desktop.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
@@ -15,6 +16,7 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.use
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
@@ -24,6 +26,8 @@ import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
+import com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode
+import com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.foundation.motion.Motion
 import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsQuickControl
@@ -42,6 +46,51 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalComposeUiApi::class)
 class TrafficNetworkConditionsControlTest {
     private var frameNanos = 0L
+
+    @Test
+    fun `short conditions labels fit beside auto scroll at fractional display scales`() = onUiThread {
+        for (scale in listOf(1f, 1.25f, 1.5f, 1.75f, 2f)) for (fontScale in listOf(1f, 1.25f)) {
+            val configuration = mutableStateOf(NetworkConditionConfiguration())
+            val width = mutableStateOf(976.dp)
+            val mode = mutableStateOf(TrafficAutoScrollMode.SMART)
+            ImageComposeScene((1440 * scale).toInt(), (100 * scale).toInt(), Density(scale, fontScale), content = {
+                KNetTheme(motion = Motion(animationsEnabled = false)) {
+                    Box(Modifier.width(width.value).background(KNetTheme.colors.background)) {
+                        TrafficToolbar(TrafficToolbarState(scrollSettings = TrafficAutoScrollSettings(mode = mode.value)),
+                            TrafficToolbarActions(), networkConditionsControl = {
+                            NetworkConditionsQuickControl(configuration.value, {}, {}, {})
+                        })
+                    }
+                }
+            }).use { scene ->
+                for (toolbarWidth in listOf(976.dp, 1440.dp)) {
+                    width.value = toolbarWidth
+                    mode.value = TrafficAutoScrollMode.SMART
+                    configuration.value = NetworkConditionConfiguration()
+                    scene.frame()
+                    val context = "display scale $scale, font scale $fontScale, width $toolbarWidth"
+                    scene.assertLabelFits("Conditions: Off", context)
+                    scene.assertLabelFits("Smart", context)
+                    if (scale == 1.25f && fontScale == 1f && toolbarWidth == 976.dp) {
+                        scene.save("fractional-125-smart")
+                    }
+                    mode.value = TrafficAutoScrollMode.MANUAL
+                    scene.frame()
+                    scene.assertLabelFits("Manual", context)
+                    configuration.value = configuration.value.copy(enabled = true,
+                        globalProfileId = NetworkConditionBuiltIns.STREAMING_100_KBPS.id)
+                    scene.frame()
+                    scene.assertLabelFits("Global: Streaming 100 kbps", context)
+                    val auto = scene.nodes().first { it.text() == "Auto scroll" }.boundsInRoot
+                    assertTrue(scene.quickAnchor().boundsInRoot.right <= auto.left, context)
+                    assertTrue(auto.right <= toolbarWidth.value * scale, context)
+                    if (scale == 1.25f && fontScale == 1f && toolbarWidth == 976.dp) {
+                        scene.save("fractional-125-manual")
+                    }
+                }
+            }
+        }
+    }
 
     @Test
     fun `global shortcut has one unlimited choice preserves old IDs and keeps custom profiles and rules`() = onUiThread {
@@ -268,12 +317,17 @@ class TrafficNetworkConditionsControlTest {
         it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().any { label -> label.startsWith("Network Conditions quick control.") }
     }
 
-    private fun ImageComposeScene.assertLabelFits(label: String) {
-        val textNode = nodes().first { it.text() == label && it.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action != null }
+    private fun ImageComposeScene.assertLabelFits(label: String, context: String = "") {
         val results = mutableListOf<TextLayoutResult>()
-        assertTrue(assertNotNull(textNode.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action).invoke(results))
-        assertTrue(results.isNotEmpty())
-        assertFalse(results.any { it.hasVisualOverflow || it.isLineEllipsized(0) }, "The selected label must fit: $label")
+        fun collect(node: SemanticsNode) {
+            node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action?.invoke(results)
+            node.children.forEach(::collect)
+        }
+        semanticsOwners.forEach { collect(it.unmergedRootSemanticsNode) }
+        val selected = results.filter { it.layoutInput.text.text == label }
+        assertTrue(selected.isNotEmpty(), "Text layout missing: $label ($context)")
+        assertFalse(selected.any { it.isLineEllipsized(0) || it.multiParagraph.maxIntrinsicWidth > it.size.width },
+            "The selected label must fit: $label ($context), layouts=" + selected.map { "${it.size}, intrinsic=${it.multiParagraph.maxIntrinsicWidth}" })
     }
 
     private fun ImageComposeScene.clickText(text: String) = click(nodes().first {

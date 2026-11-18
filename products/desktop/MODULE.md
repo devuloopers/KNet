@@ -28,6 +28,9 @@ Composes and launches the desktop product. This is the desktop composition root 
 - The product-owned dedicated setup-portal index as packaged HTML, injected into the connectivity adapter through
   its renderer contract rather than embedded in DI code.
 - Desktop shell implementations, including settings data-directory actions, behind feature-owned contracts.
+- Initial native window state uses UI core's centered 80% work-area policy. The product reads AWT's usable logical
+  screen bounds once, excluding native taskbar/dock reservations without applying display scaling twice. Remembered
+  state retains later user resizing and maximize/restore behavior.
 - Process-owned application-settings synchronization that applies persisted API Studio and live-interception
   timeouts to runtime collaborators without coupling persistence or Settings UI to those implementations.
 
@@ -45,7 +48,9 @@ The composition root owns normal-window and JVM-hook shutdown paths and is the o
 Breakpoint composition owns one coordinator shared by gate/control/capture-availability bindings, one
 process-scoped Room synchronization repository with explicit shutdown, and explicit ViewModel dispatchers.
 The auto-clear-on-startup preference is executed once from a process-owned coroutine after DI is ready; it is
-not tied to Traffic ViewModel creation. That coroutine is cancelled before proxy/storage shutdown.
+not tied to Traffic ViewModel creation. The same startup coroutine first invokes the capture factory's shared
+once-only recovery gate, independently of auto-clear and without waiting for Start Capture. That coroutine is
+cancelled before proxy/storage shutdown.
 The same product lifecycle starts one application-settings runtime synchronizer. DataStore repositories remain
 pure, while timeout changes reach the shared API client and breakpoint coordinator once per distinct value.
 API Studio assembly is isolated in `di/apistudio`: it binds the canonical authored-request execution workflow,
@@ -87,4 +92,9 @@ See `docs/graphql_persisted_queries.md`.
 
 ## Multi-device workspace and control sessions (2026-11-13)
 
-The composition root binds the shared Ktor endpoint, presence, telemetry and workspace use cases. The macOS adapter uses JBR native custom title-bar capability and measured hit regions; unsupported runtimes retain complete system decorations. macOS run/package tasks select a Java 21 JetBrains runtime by default through the existing toolchain resolver; knet.desktop.javaHome can override it. IDE launches on unsupported runtimes retain native decorations.
+The composition root binds the shared Ktor endpoint, presence, telemetry and workspace use cases. The macOS/Windows
+adapter uses JBR native custom title-bar capability and measured hit regions; unsupported runtimes retain complete
+system decorations. macOS and Windows run/package tasks select a Java 21 JetBrains runtime by default through the
+existing toolchain resolver; knet.desktop.javaHome can override it. IDE launches on unsupported runtimes retain
+native decorations. Native inset changes remain product-owned; initial geometry belongs to UI-core dimensions.
+See `docs/windows_title_bar.md` for behavior, runtime/firewall implications and qualification.

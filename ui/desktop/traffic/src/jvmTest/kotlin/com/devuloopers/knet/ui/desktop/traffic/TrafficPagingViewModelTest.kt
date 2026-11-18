@@ -746,6 +746,34 @@ class TrafficPagingViewModelTest {
     }
 
     @Test
+    fun `close completion runs only after successful scoped deletion`() = runTest(dispatcher) {
+        val source = TrafficSource.Device(RegisteredDeviceId("device"))
+        var fail = true
+        val events = mutableListOf<String>()
+        val maintenance = object : TrafficMaintenance {
+            override suspend fun clearTerminalTraffic() = error("Scoped clear expected")
+            override suspend fun clearSourceTraffic(source: TrafficSource) {
+                events += "delete"
+                if (fail) error("Storage unavailable")
+            }
+        }
+        val owner = androidx.lifecycle.ViewModelStore()
+        try {
+            val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = FakePagedPort(0), customTrafficMaintenance = maintenance)
+            owner.put("traffic", viewModel)
+            advanceUntilIdle()
+            fun close() = viewModel.clearSource(source, beforeClear = { events += "retain" },
+                afterClear = { events += "close" }, onFailure = { events += "failure" })
+            close(); advanceUntilIdle()
+            assertEquals(listOf("retain", "delete", "failure"), events)
+            fail = false
+            events.clear()
+            close(); advanceUntilIdle()
+            assertEquals(listOf("retain", "delete", "close"), events)
+        } finally { owner.clear() }
+    }
+
+    @Test
     fun `clear coalesces batch invalidations and refreshes replacement traffic once`() = runTest(dispatcher) {
         val changes = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 2_048)
         var rows = listOf(snapshot("before-clear", 1))

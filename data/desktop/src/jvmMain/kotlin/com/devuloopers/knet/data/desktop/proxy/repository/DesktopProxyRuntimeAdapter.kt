@@ -318,6 +318,9 @@ class DesktopProxyRuntimeAdapter(
 
     private suspend fun rotateForClear(preservePolicies: Boolean): CaptureClearPreparation = lifecycleMutex.withLock {
         retirementOwner.awaitDrained()
+        // Clear can be the first capture operation after restart. Recover an abandoned ACTIVE session even
+        // when this process has never opened a writer; otherwise terminal-only deletion silently skips it.
+        canonicalCaptureSessionFactory.recoverStartupStateOnce()
         val running = _runtimeState.value as? ProxyRuntimeState.Running
         if (running == null) {
             closeCanonicalCaptureSession()

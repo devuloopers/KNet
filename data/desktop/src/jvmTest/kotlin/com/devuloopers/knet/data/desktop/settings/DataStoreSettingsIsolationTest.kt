@@ -27,6 +27,33 @@ import kotlin.time.Duration.Companion.minutes
 class DataStoreSettingsIsolationTest {
 
     @Test
+    fun `device workspace visibility survives reopening and individual close`() = runTest {
+        val directory = createTempDirectory("knet-device-workspaces")
+        var scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+        fun store() = PreferenceDataStoreFactory.createWithPath(scope = scope,
+            produceFile = { directory.resolve("settings.preferences_pb").toString().toPath() })
+        val a = com.devuloopers.knet.identity.RegisteredDeviceId("device-a")
+        val b = com.devuloopers.knet.identity.RegisteredDeviceId("device-b")
+        try {
+            var preferences = com.devuloopers.knet.data.desktop.workspace.repository.DeviceWorkspacePreferencesAdapter(store())
+            preferences.setOpen(a, true)
+            preferences.setOpen(b, true)
+            scope.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+            scope.coroutineContext[kotlinx.coroutines.Job]!!.join()
+            scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+            preferences = com.devuloopers.knet.data.desktop.workspace.repository.DeviceWorkspacePreferencesAdapter(store())
+            assertEquals(setOf(a, b), preferences.openDevices.first())
+            preferences.setOpen(a, false)
+            assertEquals(setOf(b), preferences.openDevices.first())
+            scope.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+            scope.coroutineContext[kotlinx.coroutines.Job]!!.join()
+            scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+            preferences = com.devuloopers.knet.data.desktop.workspace.repository.DeviceWorkspacePreferencesAdapter(store())
+            assertEquals(setOf(b), preferences.openDevices.first(), "A closed tab must stay closed after restart")
+        } finally { scope.cancel(); directory.toFile().deleteRecursively() }
+    }
+
+    @Test
     fun `scrolling defaults to smart and manual preference survives reopening and unrelated changes`() = runTest {
         val directory = createTempDirectory("knet-scroll-preferences")
         var scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))

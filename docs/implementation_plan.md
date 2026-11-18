@@ -1,5 +1,91 @@
 # KNet Implementation Plan
 
+## Clear after restart and development presence diagnosis (2026-11-18) [COMPLETED — FIREWALL APPLY PENDING]
+
+The user's stopped desktop retained 24 records in an orphan ACTIVE session. Source Clear correctly avoided live
+writers but startup recovery was deferred until the next capture, so Clear/Close silently retained that history.
+Reproduce the stopped/restarted case through real desktop DI, recover abandoned sessions before Clear and during
+startup, and keep Clear independent of presence/Close state. Preserve active writer rotation and sibling traffic.
+Investigate Offline separately: the running JBR listener has no phone connections; its allow rules are Public-only,
+while the active LAN is Private and the development Private rule still names the old Azul runtime.
+
+The new interrupted-session integration case failed before the fix. All four real Room/DataStore Clear/Close
+cases now pass, including Online presence with a stopped runtime and direct Close before Clear. Shared startup
+recovery runs once at bootstrap/first Clear/first capture; Clear no longer depends on pending Close or roster
+timing. All 137 targeted cases passed: product 27, application nine, shell 46, Traffic 39 and data 16. Real socket
+tests verify Clear keeps the client connected and captures the next exchange; authenticated multi-device and
+control-heartbeat suites passed. Desktop compilation, all six architecture checks and whitespace validation
+passed. Logs: `build/workspace-interrupted-clear-reproduction.log`, `build/workspace-interrupted-clear-fix.log`,
+`build/workspace-clear-presence-qualification.log`, `build/workspace-clear-live-socket-verification.log`.
+
+The narrow Private/LocalSubnet firewall helper was syntax-checked and previewed with the actual JBR executable.
+This session is not elevated, so applying it remains an Administrator PowerShell step; no firewall rule or user
+traffic was changed for verification. The development app needs a restart to load the code fix. Physical phone
+reconnection after applying the runtime rule remains the final environment check.
+
+## Screen-relative initial desktop window (2026-11-18) [COMPLETED]
+
+Start the native desktop window at 80% of the usable screen width and height, centered within the work area that
+excludes taskbar/dock/menu reservations. Keep the sizing fraction and readable initial minimums in UI core and
+native screen lookup in the desktop product. Seed remembered window state once, retaining normal user resizing
+and maximize/restore behavior. Verify desktop compilation, shared geometry and native title-bar regressions.
+
+Implemented a product-owned native work-area snapshot and UI-core initial bounds policy, replacing Compose's
+800 by 600 default at the actual window creation site. Desktop/shared Android compilation, the five foundation
+and six native title-bar regression tests, all six architecture checks and whitespace validation passed. A JBR
+probe on the current 125% display read a 1536 by 912 logical work area and returned a centered 1228.8 by 729.6 dp
+window, confirming 80% sizing without applying DPI scaling twice. Logs: `build/initial-window-size-verification.log`
+and `build/initial-window-size-native.log`. No running window or user data was changed; restart loads the new size.
+
+## Fractional-scale dropdown label sizing (2026-11-18) [COMPLETED]
+
+Reproduce the Traffic toolbar's clipped Conditions and Smart labels at fractional display scales. Centralize
+pixel-accurate text/control width budgeting in UI core, accounting for independently rounded padding, gaps and
+icons. Apply it to the shared dropdown and Network Conditions shortcut, retaining width limits, caller sizing,
+motion and genuine long-label ellipsis. Verify rendered text at 100/125/150/175/200% display scaling and enlarged
+fonts, inspect the actual renders, and run affected UI/architecture checks.
+
+Reproduced both one-pixel shortages at 125% with rendered label/intrinsic-width checks, then fixed the common
+rounding budget for dropdown anchors/menus and the Conditions shortcut. The actual 125% Smart/Manual toolbar
+renders show complete labels. All relevant regressions passed: 158 tests passed across UI core (50), app shell
+(45), Network Conditions (48) and targeted Traffic cases (15). The broader UI-core suite has one unrelated,
+unchanged Windows failure: LocalDroppedFilesTest expects `/tmp/a b%20.har` while the native path is
+`C:\tmp\a b%20.har`. Desktop and shared Android compilation, all six architecture checks and whitespace validation
+passed. Logs: `build/dropdown-fractional-reproduction-width.log`, `build/dropdown-fractional-fix.log`,
+`build/dropdown-fractional-toolbar.log` and `build/dropdown-fractional-qualification.log`. See
+`docs/traffic_auto_scroll.md` for the matrix and rendered artifacts. Restart the development app to load the fix.
+
+## Device workspace Clear and Close recheck (2026-11-18) [COMPLETED]
+
+Recheck the original reported behavior through desktop composition, actual Room traffic deletion and DataStore
+workspace visibility. Verify Clear retains an offline tab, Close removes it after deletion, pairing/sibling history
+survive, failures remain retryable, and retained empty tabs survive preference-store reopening. Use temporary test
+data; do not clear the user's captured traffic for verification.
+
+The desktop composition test confirms actual source-scoped Room deletion: Clear leaves the empty device tab
+selected and durably open; confirmed offline Close deletes subsequent traffic, removes that tab and selects
+Other. Sibling traffic and pairing survive both operations. Preference reopen tests verify both retained empty
+tabs and persisted Close. A new regression reproduced a transient reconnect followed by disconnect during Close;
+the shell now remembers every observed reconnect throughout confirmation and deletion, keeping that tab open.
+Failure tests verify Close releases its operation for retry. The integration test, full 42-case app-shell suite,
+targeted application/Traffic/data suites, all architecture checks and whitespace validation passed. Verification
+used temporary stores; the user's captured traffic was not cleared. A development app restart loads the new fix.
+
+## Windows integrated workspace title bar (2026-11-18) [COMPLETED — MULTI-MONITOR FOLLOW-UP]
+
+Extend the native-backed macOS workspace title bar to Windows with system minimize, maximize/restore and close
+controls on the right. Select JetBrains Runtime 21 for Windows run/package tasks, reserve native control insets,
+and retain complete system decorations on unsupported runtimes. Verify hit testing, resize/maximize behavior,
+tab interactions, runtime fallback, packaging and architecture boundaries. Qualification evidence belongs in
+`docs/windows_title_bar.md`; native gestures must be distinguished from automated policy checks.
+
+Implemented the native Windows adapter and layout-owned title-bar host following Jewel. A JBR runtime probe
+identified non-reflexive API-proxy equality as the continuous caption fluctuation: direct proxy keys repeatedly
+disposed/reinstalled the native bar. Stable binding identity fixes that lifecycle. All six title-bar tests and
+39 app-shell tests passed, with architecture checks and a JBR-backed Windows distributable. Verified native
+minimize/maximize/restore/close buttons, tab clicks, blank-space double-click and dragging in the packaged app on
+Windows 11 at 125%. Physical multi-monitor DPI transitions remain follow-up; 100/125/200% layout checks are automated.
+
 ## Website feature tab scrollbar (2026-11-16) [COMPLETED]
 
 Hide the native scrollbar in the feature tab row while retaining horizontal touch, trackpad and

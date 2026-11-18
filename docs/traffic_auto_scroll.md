@@ -107,3 +107,29 @@ admissions, source/filter/clear epochs, background-device clearing, tab cursor r
 in-flight count results. Desktop compilation and all six architecture checks passed. Logs:
 `/tmp/knet-progressive-read-qualification.log` and `/tmp/knet-progressive-read-final.log`.
 The running desktop app and user database were not accessed or modified.
+
+## Fractional display scaling (2026-11-18)
+
+Smart and Manual use the shared dropdown's measured-label width. At 125% display scaling, adding padding and
+arrow widths in dp before rounding reserved one pixel less than the actual layout consumed. The Conditions
+shortcut had the same rounding mismatch across its two icons. This clipped short values despite sufficient
+toolbar space.
+
+UI core's `Density.measuredControlWidth` now adds measured text pixels to each separately rounded inset, gap and
+icon. The shared dropdown uses it for anchor/menu widths, and Conditions uses it with the exact button padding
+from `ButtonDefaults`. Existing bounds, explicit form widths, motion and truncation for genuinely long values
+remain in effect.
+
+`SharedDropdownSizingTest` renders all three size presets and both alignments at 100/125/150/175/200% display
+scaling with normal and 125% fonts, checks selected popup labels, and retains the existing font-change, form-width
+and long-value cases. `TrafficNetworkConditionsControlTest` checks actual Conditions/Smart/Manual labels at the
+same scales/font sizes in 976 dp and 1440 dp toolbars, including the animated label component and Manual switch.
+Both regressions reproduced the one-pixel shortage before the fix. The 125% Smart and Manual renders are under
+`ui/desktop/app/build/reports/network-conditions-ui/fractional-125-*.png`.
+
+Qualification passed 158 tests: 50 UI-core, 45 shell, 48 Network Conditions and 15 focused Traffic tests, with no
+errors or skips. The full UI-core suite also ran one unchanged failing file-drop fixture that assumes a Linux
+absolute path on Windows (`/tmp/a b%20.har` versus `C:\tmp\a b%20.har`). It does not exercise control sizing.
+Desktop compilation, shared UI-core Android compilation and all six architecture checks passed. Logs are
+`build/dropdown-fractional-reproduction-width.log`, `build/dropdown-fractional-fix.log`,
+`build/dropdown-fractional-toolbar.log` and `build/dropdown-fractional-qualification.log`.

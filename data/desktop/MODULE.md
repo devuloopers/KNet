@@ -126,12 +126,20 @@ No wall-clock or per-direction sequence is used to correlate multiplexed operati
 
 Canonical SQL adapters scope history, facets, cursors and bounded crash-safe deletion by verified source. Primitive SourceTrafficMeters observe real proxy socket bytes independently of capture admission. Workspace selection uses existing DataStore preferences.
 
+Device tab visibility is stored alongside workspace selection in DataStore; it contains only registered identity
+keys and is independent of captured traffic, credentials and pairing.
+
 `DesktopDeviceTrafficHistoryAdapter` observes indexed Room existence projections for device tab eligibility across all retained sessions. Membership includes zero-byte TLS records, deduplicates identities and loads no traffic payloads or filtered page windows.
 
 Traffic Clear completes after durable metadata removal/outbox admission; file convergence belongs to the
 process-scoped reactive BodyDeletionWorker. It drains bounded batches, acknowledges successful files together,
 persists failed-file retry deadlines, and shares serialization with startup recovery. See
 [Traffic Clear performance](../../docs/traffic_clear_performance.md).
+
+The session factory exposes one shared startup-recovery gate to bootstrap, capture startup and Clear. Abandoned
+ACTIVE sessions are recovered even when Clear is the first operation after restarting a stopped desktop. The gate
+finishes before any new writer opens and never repeats against live capture rotation; source deletion retains its
+terminal-session guard and sibling ownership checks.
 
 ## Capture workflow follow-up
 

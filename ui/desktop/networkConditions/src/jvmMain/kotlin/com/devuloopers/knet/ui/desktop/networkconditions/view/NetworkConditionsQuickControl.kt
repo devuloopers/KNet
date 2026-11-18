@@ -37,6 +37,7 @@ import androidx.compose.ui.window.PopupProperties
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
+import com.devuloopers.knet.ui.core.components.button.ButtonDefaults
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.dialog.AlertDialog
@@ -46,6 +47,7 @@ import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownSize
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
+import com.devuloopers.knet.ui.core.foundation.dimensions.measuredControlWidth
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.networkconditions.model.noThrottlingProfileName
 import com.devuloopers.knet.ui.desktop.networkconditions.model.globalProfileOptions
@@ -70,11 +72,13 @@ fun NetworkConditionsQuickControl(
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val textStyle = LocalTextStyle.current.merge(KNetTheme.typography.labelMedium)
-    val labelWidth = remember(label, textStyle, density) {
-        with(density) { textMeasurer.measure(label, style = textStyle, maxLines = 1, softWrap = false).size.width.toDp() }
+    val labelWidthPx = remember(label, textStyle, density, textMeasurer) {
+        textMeasurer.measure(label, style = textStyle, maxLines = 1, softWrap = false).size.width
     }
-    val contentWidth = labelWidth + KNetTheme.spacing.md * 2 +
-        KNetTheme.dimensions.iconSizeSmall * 2 + KNetTheme.spacing.xs * 2
+    val contentWidth = density.measuredControlWidth(labelWidthPx, listOf(
+        ButtonDefaults.horizontalPadding, ButtonDefaults.horizontalPadding,
+        KNetTheme.dimensions.iconSizeSmall, KNetTheme.dimensions.iconSizeSmall,
+        KNetTheme.spacing.xs, KNetTheme.spacing.xs))
     val motion = KNetTheme.motion
     val gapPx = with(density) { KNetTheme.spacing.xs.roundToPx() }
     val positionProvider = remember(gapPx) { QuickControlPopupPositionProvider(gapPx) }

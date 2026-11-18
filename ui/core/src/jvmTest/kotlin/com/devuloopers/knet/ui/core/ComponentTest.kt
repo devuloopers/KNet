@@ -1,6 +1,7 @@
 package com.devuloopers.knet.ui.core
 
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
@@ -55,12 +56,12 @@ class ComponentTest {
         assertEquals(120.dp, KNetDropdownDefaults.SearchableWidth)
         assertEquals(148.dp, KNetDropdownDefaults.MultiSelectWidth)
         assertEquals(8.dp, KNetDropdownDefaults.AnchorContentSpacing)
-        assertEquals(72.dp, KNetDropdownDefaults.contentWidth(0.dp, KNetDropdownSize.Standard))
-        assertEquals(98.dp, KNetDropdownDefaults.contentWidth(50.dp, KNetDropdownSize.Standard))
-        assertEquals(280.dp, KNetDropdownDefaults.contentWidth(500.dp, KNetDropdownSize.Standard))
-        assertEquals(72.dp, KNetDropdownDefaults.menuContentWidth(0.dp))
-        assertEquals(93.dp, KNetDropdownDefaults.menuContentWidth(50.dp))
-        assertEquals(543.dp, KNetDropdownDefaults.menuContentWidth(500.dp))
+        assertEquals(72.dp, KNetDropdownDefaults.contentWidth(0, KNetDropdownSize.Standard, Density(1f)))
+        assertEquals(98.dp, KNetDropdownDefaults.contentWidth(50, KNetDropdownSize.Standard, Density(1f)))
+        assertEquals(280.dp, KNetDropdownDefaults.contentWidth(500, KNetDropdownSize.Standard, Density(1f)))
+        assertEquals(72.dp, KNetDropdownDefaults.menuContentWidth(0, Density(1f)))
+        assertEquals(93.dp, KNetDropdownDefaults.menuContentWidth(50, Density(1f)))
+        assertEquals(543.dp, KNetDropdownDefaults.menuContentWidth(500, Density(1f)))
         assertTrue(KNetDropdownDefaults.MaxMenuHeight > KNetDropdownDefaults.ItemHeight)
     }
 

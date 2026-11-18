@@ -19,6 +19,8 @@ data class Dimensions(
     val workspaceTabGap: Dp = 6.dp,
     /** Space reserved for native macOS traffic lights when drawing into full-window content. */
     val nativeWindowControlsInset: Dp = 84.dp,
+    /** Windows caption-button reservation until the native peer reports its measured width. */
+    val windowsWindowControlsInset: Dp = 138.dp,
     val toolbarHeight: Dp = 32.dp,
     /** Bounds optional operational status text so scrollable toolbars retain practical travel distance. */
     val toolbarStatusMaxWidth: Dp = 240.dp,
@@ -69,6 +71,8 @@ data class Dimensions(
     val fileDropTargetHeight: Dp = 120.dp,
     val sideDrawerWidth: Dp = 720.dp,
     val expandedSideDrawerWidth: Dp = 880.dp,
+    /** Initial floating desktop window occupies this fraction of each usable screen dimension. */
+    val initialWindowScreenFraction: Float = 0.8f,
     val minimumWindowWidth: Dp = 1024.dp,
     val minimumWindowHeight: Dp = 600.dp
 )

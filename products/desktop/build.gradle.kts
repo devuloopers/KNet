@@ -81,9 +81,10 @@ val nativePackageVersion: String = providers.gradleProperty("knet.desktop.packag
 compose.desktop {
     application {
         mainClass = "com.devuloopers.knet.products.desktop.MainKt"
-        // A supported JBR preserves native macOS gestures for the integrated device title bar.
+        // JBR supplies native-backed integrated title bars on macOS and Windows.
         val configuredJavaHome = providers.gradleProperty("knet.desktop.javaHome")
-        if (System.getProperty("os.name").startsWith("Mac", ignoreCase = true)) {
+        val desktopOs = System.getProperty("os.name")
+        if (desktopOs.startsWith("Mac", ignoreCase = true) || desktopOs.startsWith("Windows", ignoreCase = true)) {
             javaHome = configuredJavaHome.orElse(javaToolchains.launcherFor {
                 languageVersion.set(JavaLanguageVersion.of(21))
                 vendor.set(JvmVendorSpec.JETBRAINS)

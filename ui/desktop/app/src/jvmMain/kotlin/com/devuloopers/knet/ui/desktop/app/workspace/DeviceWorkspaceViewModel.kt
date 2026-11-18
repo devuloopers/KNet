@@ -21,18 +21,25 @@ import kotlinx.coroutines.launch
  * @property source Selected Traffic source; other destinations keep global behavior.
  * @property throughput Current source's bounded, independently sampled rate history.
  * @property clearConfirmation Explicit offline device target awaiting confirmation, independent of selection.
+ * @property pendingCounts Pending interception counts projected onto the workspace tabs.
+ * @property closeError Recoverable Close failure presented even when Traffic is hidden.
+ * @property closingWorkspace Confirmed target retained until deletion completes, including observed reconnects.
  */
 data class DeviceWorkspaceState(val devices: List<DeviceWorkspaceEntry> = emptyList(),
     val source: TrafficSource = TrafficSource.Other, val throughput: NetworkThroughputHistory = NetworkThroughputHistory(),
     val clearConfirmation: DeviceTrafficClearConfirmation? = null,
-    val pendingCounts: Map<com.devuloopers.knet.domain.policy.PolicyWorkspace, Int> = emptyMap())
+    val pendingCounts: Map<com.devuloopers.knet.domain.policy.PolicyWorkspace, Int> = emptyMap(),
+    val closeError: String? = null,
+    val closingWorkspace: DeviceTrafficClearConfirmation? = null)
 
 /**
  * Snapshot of a user-requested destructive action; switching tabs never retargets this confirmation.
  * @property source Exact verified identity whose entire locally retained traffic will be removed.
  * @property deviceLabel Device name and distinct identity suffix shown when confirmation was opened.
+ * @property hasReconnected A connection observed at any point during confirmation or deletion keeps the tab open.
  */
-data class DeviceTrafficClearConfirmation(val source: TrafficSource.Device, val deviceLabel: String)
+data class DeviceTrafficClearConfirmation(val source: TrafficSource.Device, val deviceLabel: String,
+    val hasReconnected: Boolean = false)
 
 /** Coordinates stable roster/selection and the existing rate sampler through application use cases only. */
 class DeviceWorkspaceViewModel(
@@ -40,6 +47,7 @@ class DeviceWorkspaceViewModel(
     observeSelection: ObserveDeviceWorkspaceSelectionUseCase,
     private val selectWorkspace: SelectDeviceWorkspaceUseCase,
     private val observeTraffic: ObserveSourceTrafficUseCase,
+    private val setWorkspaceOpen: SetDeviceWorkspaceOpenUseCase,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(DeviceWorkspaceState())
     /** Immutable presentation snapshot; credentials and socket objects never enter this state. */
@@ -63,7 +71,14 @@ class DeviceWorkspaceViewModel(
                 val valid = wanted !is TrafficSource.Device || devices.any { entry -> entry.device.id == wanted.id }
                 val selected = if (valid && wanted != TrafficSource.All) wanted else TrafficSource.Other
                 mutableState.update { current ->
+                    fun trackReconnect(action: DeviceTrafficClearConfirmation?): DeviceTrafficClearConfirmation? =
+                        action?.let { pending ->
+                            if (devices.any { it.device.id == pending.source.id && it.status != DevicePresenceStatus.OFFLINE })
+                                pending.copy(hasReconnected = true) else pending
+                        }
                     current.copy(devices = devices, source = selected,
+                        clearConfirmation = trackReconnect(current.clearConfirmation),
+                        closingWorkspace = trackReconnect(current.closingWorkspace),
                         throughput = if (current.source == selected) current.throughput else NetworkThroughputHistory())
                 }
                 // A disappearing selected tab falls back once; reconnecting it must not steal focus later.
@@ -82,24 +97,16 @@ class DeviceWorkspaceViewModel(
     }
 
     /**
-     * Routes toolbar Clear: connected/grace-period devices and Other clear immediately; offline devices
-     * use the same confirmation as tab Close. Returns only an immediately authorized source to clear.
+     * Routes toolbar Clear independently of presence, roster timing or a pending Close. Traffic owns the
+     * duplicate-operation guard; a workspace shell operation must never silently block traffic deletion.
      */
     fun requestClear(source: TrafficSource): TrafficSource? {
-        if (source == TrafficSource.All || state.value.clearConfirmation != null) return null
-        if (source is TrafficSource.Device) {
-            val entry = state.value.devices.find { device -> device.device.id == source.id } ?: return null
-            if (entry.status == DevicePresenceStatus.OFFLINE) {
-                requestClose(source.id)
-                return null
-            }
-        }
-        return source
+        return source.takeUnless { it == TrafficSource.All }
     }
 
     /** Opens confirmation for the clicked offline tab without changing the selected Traffic workspace. */
     fun requestClose(id: RegisteredDeviceId) {
-        if (state.value.clearConfirmation != null) return
+        if (state.value.clearConfirmation != null || state.value.closingWorkspace != null) return
         val entry = state.value.devices.find { device -> device.device.id == id } ?: return
         if (entry.status != DevicePresenceStatus.OFFLINE) return
         mutableState.update { current -> current.copy(clearConfirmation =
@@ -111,13 +118,38 @@ class DeviceWorkspaceViewModel(
 
     /**
      * Consumes confirmation once and returns its original source, even if the device reconnected.
-     * Roster observation determines whether the tab remains after deletion; this never forces it hidden.
      */
     fun confirmClear(): TrafficSource.Device? {
         val pending = state.value.clearConfirmation ?: return null
-        dismissClear()
+        mutableState.update { it.copy(clearConfirmation = null, closingWorkspace = pending) }
         return pending.source
     }
+
+    /** Retain an existing device tab before deleting the history that may currently keep it visible. */
+    suspend fun retainForClear(source: TrafficSource) {
+        if (source is TrafficSource.Device) setWorkspaceOpen.execute(source.id, true)
+    }
+
+    /** Complete Close only after deletion; a reconnect always keeps the tab open. */
+    suspend fun finishClose(source: TrafficSource.Device) {
+        if (state.value.closingWorkspace?.source != source) return
+        fun keepOpen(): Boolean = state.value.closingWorkspace?.hasReconnected == true ||
+            state.value.devices.any { it.device.id == source.id && it.status != DevicePresenceStatus.OFFLINE }
+        try {
+            if (keepOpen()) return
+            setWorkspaceOpen.execute(source.id, false)
+            // A preference write suspends. Retain a reconnect observed while that write was committing too.
+            if (keepOpen()) setWorkspaceOpen.execute(source.id, true)
+        } finally {
+            mutableState.update { it.copy(closingWorkspace = null) }
+        }
+    }
+
+    /** Releases a failed Close for retry and keeps its workspace visible with an actionable error. */
+    fun closeFailed() { mutableState.update { it.copy(closingWorkspace = null,
+        closeError = "The device workspace could not be closed. Its traffic may not have been fully cleared; please try again.") } }
+    /** Acknowledges the previous Close failure without changing traffic, pairing or tab retention. */
+    fun dismissCloseError() { mutableState.update { it.copy(closeError = null) } }
 
     private fun persistSelection(source: TrafficSource) {
         viewModelScope.launch {

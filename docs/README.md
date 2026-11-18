@@ -5,6 +5,9 @@ intentional: implementation presence, automated evidence, and release support ar
 
 ## Current sources of truth
 
+Windows integrated window controls, runtime selection and native acceptance evidence are documented in
+[`windows_title_bar.md`](windows_title_bar.md).
+
 Use these documents when deciding what the repository currently owns or supports:
 
 1. [`README.md`](../README.md) — public product scope, maturity summary, setup, limitations, and verification entry

@@ -8,6 +8,8 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
 ## Owns
 
 - Design tokens, palettes, typography, responsive layout primitives, and generic UI components.
+- Initial floating-window geometry: 80% of the supplied usable screen bounds, centered and clamped to the shared
+  readable minimums without exceeding a small work area. Native screen discovery remains product-owned.
 - Theme-governed inline control reveal/exit motion and opt-in dropdown label crossfades that retain the same
   keyboard/popup owner, preserve single-value accessibility semantics, and respect reduced motion.
 - A shared manager-screen layout and header with matching page insets, title/subtitle typography, stable
@@ -29,6 +31,9 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
   centered label-and-chevron group
   without changing width calculation or the default edge-separated arrangement; both arrangements retain the
   shared label-to-chevron spacing token.
+- Pixel-accurate measured control widths round each padding inset, icon and gap independently before adding
+  measured text pixels. Dropdown anchors/menus and feature-owned compact controls reuse this foundation at
+  fractional display scales. ButtonDefaults exposes the same per-side padding consumed by button layout.
 - Optional dropdown descriptions explain the current value and menu choices after a shared hover delay.
   The reusable tooltip host uses KNet tokens, bounds wrapped paragraphs to the window, prefers beside-menu help,
   never takes focus or reserves layout space, and cancels stale/pending help on interaction or content changes.
