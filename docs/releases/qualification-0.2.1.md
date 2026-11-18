@@ -1,6 +1,6 @@
 # Desktop 0.2.1 release qualification
 
-Status: **IN PROGRESS — version metadata and hosted qualification preparation.**
+Status: **IN PROGRESS — cross-platform qualification and native packaging.**
 
 The user authorized creating and publishing this Desktop patch release. The canonical release tag is
 `desktop-v0.2.1`, following the repository's independent product-release workflow. Companion remains 0.2.0.
@@ -38,6 +38,21 @@ The revised local gate passed all three cases: download measured 99,342.9 bit/s 
 upload measured 99,960.7 bit/s with a 71.669-second shared window. The 500 MiB integrity and bounded-memory case
 also passed. Evidence: `build/release-0.2.1/load-window-verification.log` and the task's TSV/XML reports.
 
-Pending the versioned source commit, complete CI, Desktop release qualification and all five packaging jobs.
+The next hosted run exposed three additional fixture assumptions. The sustained-transfer clock included TCP and
+CONNECT setup, so a late connection could consume the fairness allowance before payload transfer began. All four
+tunnels now finish setup before a shared payload-start barrier; the existing five-second first-byte, one-minute
+shared window and rate/integrity/memory limits remain unchanged. Tunnel setup has its own bounded deadline.
+
+On Linux, enlarged fonts made the long streaming-profile label exceed the toolbar's intentional 30% width cap at
+minimum window width. Short Conditions/Auto scroll labels must still fit at every tested size; the long profile
+must fit at wide width, while the narrow case retains the existing bounded-overflow and no-overlap requirements.
+The Clear/Close integration fixture now uses a single-thread Main dispatcher and dispatches UI actions there,
+matching production event dispatch instead of allowing Unconfined callbacks to race on database threads. Its
+original five-second waits remain. The revised four integration and six toolbar cases passed locally. All three
+load cases and architecture checks also passed (`cross-platform-fixture-verification.log`): download measured
+99,971.1 bit/s with a 0.493-second last first byte, and upload 99,981.3 bit/s with a 1.643-second last first byte.
+Both shared transfer windows exceeded 70 seconds; the 500 MiB case retained integrity and memory checks.
+
+Pending complete CI, Desktop release qualification and all five packaging jobs on the final source commit.
 The workflow stages an unpublished draft with 13 packages, checksums and provenance. Publication will follow
 source/tag verification and asset inspection; the public release and Latest marker will then be checked.

@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.*
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 import java.nio.file.Files
+import java.util.concurrent.Executors
 import kotlin.test.*
 
 /** Exercises the same Clear/Close callback chain as MainWindow with actual scoped Room and DataStore adapters. */
@@ -45,7 +46,10 @@ class DeviceWorkspaceClearCloseEndToEndTest {
         verifyClearAndClose(interrupted = true, clearFirst = false)
 
     private fun verifyClearAndClose(interrupted: Boolean, connected: Boolean = false, clearFirst: Boolean = true): Unit = runBlocking {
-        Dispatchers.setMain(Dispatchers.Unconfined)
+        // Production Main serializes UI state. Unconfined resumes on Room/DataStore threads and permits
+        // source selection to race the clearing flag, which is not representative of desktop event dispatch.
+        val mainDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+        Dispatchers.setMain(mainDispatcher)
         val root = Files.createTempDirectory("knet-workspace-clear-close-")
         val observedPresence = MutableStateFlow<Map<RegisteredDeviceId, DevicePresence>>(if (connected)
             mapOf(RegisteredDeviceId("a") to DevicePresence(DevicePresenceStatus.CONNECTED, "vpn-run", 1)) else emptyMap())
@@ -78,18 +82,20 @@ class DeviceWorkspaceClearCloseEndToEndTest {
             }
             val workspaces = application.koin.get<DeviceWorkspaceViewModel>().also { owner.put("workspaces", it) }
             val traffic = application.koin.get<TrafficViewModel>().also { owner.put("traffic", it) }
-            navigation = launch(Dispatchers.Unconfined) {
+            navigation = launch(Dispatchers.Main.immediate) {
                 workspaces.state.map { it.source }.distinctUntilChanged().collect(traffic::selectSource)
             }
             withTimeout(5_000) { workspaces.state.first { it.devices.size == 2 } }
             val a = TrafficSource.Device(RegisteredDeviceId("a"))
-            workspaces.select(a)
+            withContext(Dispatchers.Main) { workspaces.select(a) }
             withTimeout(5_000) { traffic.uiState.first { it.source == a && !it.isPageLoading } }
 
             val preferences = application.koin.get<DeviceWorkspacePreferences>()
             if (clearFirst) {
-                val clearTarget = assertNotNull(workspaces.requestClear(a))
-                traffic.clearSource(clearTarget, beforeClear = { workspaces.retainForClear(clearTarget) })
+                withContext(Dispatchers.Main) {
+                    val clearTarget = assertNotNull(workspaces.requestClear(a))
+                    traffic.clearSource(clearTarget, beforeClear = { workspaces.retainForClear(clearTarget) })
+                }
                 withTimeout(5_000) { traffic.uiState.first { !it.isClearingHistory } }
                 assertNull(traffic.uiState.value.trafficErrorMessage)
                 assertNull(dao.getOpaqueFlow("a-before"), "Clear must delete actual storage records")
@@ -107,11 +113,13 @@ class DeviceWorkspaceClearCloseEndToEndTest {
             }
 
             dao.insertOpaqueFlow(flow("a-after", "a"))
-            workspaces.requestClose(a.id)
-            val closeTarget = assertNotNull(workspaces.confirmClear())
             val failures = mutableListOf<String>()
-            traffic.clearSource(closeTarget, beforeClear = { workspaces.retainForClear(closeTarget) },
-                afterClear = { workspaces.finishClose(closeTarget) }, onFailure = { failures += "close failed" })
+            withContext(Dispatchers.Main) {
+                workspaces.requestClose(a.id)
+                val closeTarget = assertNotNull(workspaces.confirmClear())
+                traffic.clearSource(closeTarget, beforeClear = { workspaces.retainForClear(closeTarget) },
+                    afterClear = { workspaces.finishClose(closeTarget) }, onFailure = { failures += "close failed" })
+            }
             withTimeout(5_000) { traffic.uiState.first { !it.isClearingHistory } }
             withTimeout(5_000) { workspaces.state.first { state -> state.devices.none { it.device.id == a.id } } }
             assertTrue(failures.isEmpty())
@@ -123,12 +131,13 @@ class DeviceWorkspaceClearCloseEndToEndTest {
             assertNotNull(application.koin.get<RegisteredDeviceStore>().getRegisteredDevice(a.id), "Pairing is retained")
         } finally {
             navigation?.cancelAndJoin()
-            owner.clear()
+            withContext(Dispatchers.Main) { owner.clear() }
             application.close()
             scope.coroutineContext.job.join()
             database.close()
             root.toFile().deleteRecursively()
             Dispatchers.resetMain()
+            mainDispatcher.close()
         }
     }
 

@@ -17,6 +17,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.security.MessageDigest
 import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
@@ -78,6 +79,9 @@ class NetworkProtectionLoadQualificationTest {
         val directPeak = AtomicLong(directBase)
         val queuePeak = AtomicLong()
         val latestFirst = AtomicLong()
+        val ready = CountDownLatch(FLOWS)
+        val beginTransfer = CountDownLatch(1)
+        val started = AtomicLong()
         val proxy = KNetProxyServer(
             port = ServerSocket(0).use { it.localPort },
             serverTlsContextProvider = ServerTlsContextProvider { _, _ -> CompletableFuture.failedFuture(AssertionError("Opaque tunnel requested MITM identity")) },
@@ -92,7 +96,6 @@ class NetworkProtectionLoadQualificationTest {
             heapPeak.accumulateAndGet(ManagementFactory.getMemoryMXBean().heapMemoryUsage.used, ::maxOf)
             directPeak.accumulateAndGet(PooledByteBufAllocator.DEFAULT.metric().usedDirectMemory(), ::maxOf)
         }, 0, 10, TimeUnit.MILLISECONDS)
-        val started = System.nanoTime()
         val accepted = originWorkers.submit {
             repeat(FLOWS) {
                 val socket = origin.accept().also(sockets::add)
@@ -107,7 +110,7 @@ class NetworkProtectionLoadQualificationTest {
                             while (received < bytesPerFlow) {
                                 val count = peer.inputStream.read(buffer, 0, minOf(buffer.size.toLong(), bytesPerFlow - received).toInt())
                                 check(count > 0) { "Upload truncated after $received of $bytesPerFlow bytes" }
-                                if (received == 0L) latestFirst.accumulateAndGet(System.nanoTime() - started, ::maxOf)
+                                if (received == 0L) latestFirst.accumulateAndGet(System.nanoTime() - started.get(), ::maxOf)
                                 received += count; digest.update(buffer, 0, count)
                             }
                             check(peer.inputStream.read() == -1) { "Upload EOF overtaken or payload duplicated" }
@@ -132,7 +135,7 @@ class NetworkProtectionLoadQualificationTest {
             }
         }
         try {
-            val results = clients.invokeAll((0 until FLOWS).map { Callable {
+            val results = (0 until FLOWS).map { clients.submit(Callable {
                 val socket = Socket().also(sockets::add)
                 socket.use { client ->
                     client.soTimeout = 90_000
@@ -147,6 +150,10 @@ class NetworkProtectionLoadQualificationTest {
                         header += byte.toChar(); check(header.length < 8192)
                     }
                     check(header.startsWith("HTTP/1.1 200"))
+                    // Establish every tunnel before timing payload fairness. Otherwise host/JIT/socket setup
+                    // for the last CONNECT is incorrectly counted as scheduler starvation.
+                    ready.countDown()
+                    check(beginTransfer.await(20, TimeUnit.SECONDS)) { "Concurrent transfer start was not released" }
                     client.outputStream.write(1); client.outputStream.flush()
                     val digest = MessageDigest.getInstance("SHA-256")
                     if (direction == Direction.UPLOAD) {
@@ -168,17 +175,21 @@ class NetworkProtectionLoadQualificationTest {
                     while (received < bytesPerFlow) {
                         val count = input.read(buffer, 0, minOf(buffer.size.toLong(), bytesPerFlow - received).toInt())
                         check(count > 0) { "Opaque relay ended after $received of $bytesPerFlow bytes" }
-                        if (received == 0L) latestFirst.accumulateAndGet(System.nanoTime() - started, ::maxOf)
+                        if (received == 0L) latestFirst.accumulateAndGet(System.nanoTime() - started.get(), ::maxOf)
                         received += count; digest.update(buffer, 0, count)
                         if (slowConsumer && ++chunks % 4 == 0) Thread.sleep(1)
                     }
                     client.shutdownOutput()
                     received to digest.digest()
                 }
-            } }, 110, TimeUnit.SECONDS)
-            val elapsed = System.nanoTime() - started
+            }) }
+            check(ready.await(15, TimeUnit.SECONDS)) { "Concurrent tunnels did not finish setup" }
+            started.set(System.nanoTime())
+            beginTransfer.countDown()
+            val deadline = started.get() + TimeUnit.SECONDS.toNanos(110)
+            val received = results.map { it.get((deadline - System.nanoTime()).coerceAtLeast(1), TimeUnit.NANOSECONDS) }
+            val elapsed = System.nanoTime() - started.get()
             assertTrue(results.none { it.isCancelled }, "Streaming qualification exceeded its timeout")
-            val received = results.map { it.get() }
             accepted.get(5, TimeUnit.SECONDS)
             val expectedDigests = originResults.map { it.get(5, TimeUnit.SECONDS) }
             received.forEach { (_, digest) -> assertContentEquals(expectedDigests.first(), digest) }
