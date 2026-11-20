@@ -1,5 +1,11 @@
 # KNet Implementation Plan
 
+## Traffic forwarding status width [COMPLETED]
+
+The running status uses its full label and endpoint width in the shared toolbar scroll area.
+Rendered tests verify the complete label at standard, 125%, and 200% display scaling and confirm
+it remains reachable after resizing. The Traffic suite, shared toolbar tests, and desktop build passed.
+
 ## Desktop 0.2.1 release (2026-11-18) [COMPLETED]
 
 Published the user-authorized Desktop patch as `desktop-v0.2.1`, now GitHub's Latest release. All 13 native

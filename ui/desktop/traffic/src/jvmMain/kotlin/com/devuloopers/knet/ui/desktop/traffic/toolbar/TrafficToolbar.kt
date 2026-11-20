@@ -178,11 +178,12 @@ fun TrafficToolbar(
                         softWrap = false
                     )
                 }
-                // Capture/Pause/Clear stay first; a long status must not displace those controls.
-                // Engine Operational Status Badge
+                val engine = state.engineState
+                // Running endpoints use their full width in the shared horizontal scroll area.
+                val statusWidth = if (engine is ProxyRuntimeState.Running) Modifier
+                    else Modifier.widthIn(max = dimensions.toolbarStatusMaxWidth)
                 Row(
-                    modifier = Modifier
-                        .widthIn(max = dimensions.toolbarStatusMaxWidth)
+                    modifier = statusWidth
                         .clip(shapes.small)
                         .background(themeColors.surfaceVariant)
                         .border(1.dp, themeColors.border, shapes.small)
@@ -190,7 +191,7 @@ fun TrafficToolbar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(spacing.xs)
                 ) {
-                    val (dotColor, statusText) = when (val engine = state.engineState) {
+                    val (dotColor, statusText) = when (engine) {
                         is ProxyRuntimeState.Running -> {
                             val port = engine.handle.endpoints.endpoints.firstOrNull()?.port ?: "?"
                             val activity = if (isCapturing) "Capturing" else "Forwarding · Capture paused"
