@@ -1,5 +1,6 @@
 package com.devuloopers.knet.engine.proxy.upstream
 
+import com.devuloopers.knet.engine.proxy.tls.TlsServerName
 import io.netty.util.NetUtil
 
 /** Strongly typed result explaining which identity is used for upstream DNS routing. */
@@ -30,6 +31,14 @@ internal object UpstreamRouteHostSelector {
             primaryHost = connectHost,
             fallbackDnsHost = fallbackDnsHost,
         )
+    }
+
+    /** Keeps the IPv6 CONNECT target first and adds DNS candidates only for a valid ClientHello name. */
+    fun selectClassifiedTunnel(connectHost: String, tlsServerName: String?): UpstreamRouteHostSelection {
+        val fallback = tlsServerName
+            ?.takeIf { NetUtil.isValidIpV6Address(connectHost) }
+            ?.let { name -> runCatching { TlsServerName.select(name, connectHost) }.getOrNull() }
+        return select(connectHost, fallback, isTls = true)
     }
 
     private fun isIpLiteral(value: String): Boolean =

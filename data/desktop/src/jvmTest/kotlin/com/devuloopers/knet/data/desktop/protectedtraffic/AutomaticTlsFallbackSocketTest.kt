@@ -25,11 +25,13 @@ class AutomaticTlsFallbackSocketTest {
     @Test fun `tls 12 rejection automatically tunnels reconnect while manual inspection remains authoritative`() = exercise("TLSv1.2")
     @Test fun `tls 13 rejection automatically tunnels reconnect while manual inspection remains authoritative`() = exercise("TLSv1.3")
     @Test fun `automatic tunnel preserves mutual TLS client authentication`() = exercise("TLSv1.3", mutual = true)
+    @Test fun `automatic tunnel uses IPv4 origin when the IPv6 CONNECT address is unreachable`() =
+        exercise("TLSv1.3", connectHost = "[::1]")
 
     @Test fun `TLS 12 origin resumption offer can relearn after a temporary decision is cleared`() = exercise("TLSv1.2", relearn = true)
     @Test fun `TLS 13 origin resumption offer can relearn after a temporary decision is cleared`() = exercise("TLSv1.3", relearn = true)
 
-    private fun exercise(protocol: String, mutual: Boolean = false, relearn: Boolean = false) = runBlocking {
+    private fun exercise(protocol: String, mutual: Boolean = false, relearn: Boolean = false, connectHost: String = "127.0.0.1") = runBlocking {
         val root = Files.createTempDirectory("knet-auto-tls-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodies = FileBodyStore(root.resolve("bodies"))
@@ -77,7 +79,7 @@ class AutomaticTlsFallbackSocketTest {
         fun client(): SSLSocket {
             val transport = Socket().apply { connect(proxy.boundAddress()); soTimeout = 10_000 }
             transport.outputStream.apply {
-                write("CONNECT 127.0.0.1:${origin.address.port} HTTP/1.1\r\nHost: localhost\r\n\r\n".encodeToByteArray()); flush()
+                write("CONNECT $connectHost:${origin.address.port} HTTP/1.1\r\nHost: localhost\r\n\r\n".encodeToByteArray()); flush()
             }
             val header = StringBuilder()
             while (!header.endsWith("\r\n\r\n")) {
@@ -112,6 +114,7 @@ class AutomaticTlsFallbackSocketTest {
             assertEquals("CERTIFICATE_REJECTED", rejected.inspectionFailureReason)
             assertEquals("GLOBAL", rejected.protectionOrigin)
             val tunnel = flows.single { it.protectionOrigin == "AUTOMATIC" }
+            assertEquals(connectHost.removeSurrounding("[", "]"), tunnel.destinationHost)
             assertEquals("TUNNEL", tunnel.policyAction)
             assertEquals("CERTIFICATE_REJECTED", tunnel.inspectionFailureReason)
             assertTrue(tunnel.uploadedBytes > 0 && tunnel.downloadedBytes > 0)

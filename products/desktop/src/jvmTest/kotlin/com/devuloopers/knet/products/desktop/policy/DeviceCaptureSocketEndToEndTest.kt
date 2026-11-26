@@ -28,6 +28,7 @@ import com.devuloopers.knet.identity.*
 import com.devuloopers.knet.pairing.*
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.model.*
+import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import io.netty.bootstrap.*
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
@@ -119,7 +120,28 @@ class DeviceCaptureSocketEndToEndTest {
                     }.exchange
                     assertEquals(ExchangeState.CANCELLED, cut.state)
                     assertEquals("capture_paused", cut.terminalOutcome?.reason?.code?.value)
+                    val response = assertNotNull(cut.response)
+                    assertEquals(200, response.head.status.code)
+                    assertEquals(prefix.encodeToByteArray().size.toLong(), assertIs<MessageBodyRef.Available>(response.body).body.storedBytes)
                 } }
+            }
+        }
+    }
+
+    @Test fun pauseBeforeResponseHeadersRetainsOnlyTheRequestAndForwardsTheResponse(): Unit = runBlocking {
+        Fixture().use { fixture ->
+            fixture.runtime.resume(owner)
+            fixture.connect("owner").use { socket ->
+                val path = "/hold/headers"
+                fixture.send(socket, path)
+                assertNull(fixture.awaitPath("owner", path).single().exchange.response)
+                fixture.runtime.pause(owner)
+                fixture.releases.computeIfAbsent(path) { CompletableFuture() }.complete(Unit)
+                assertTrue(readHeader(socket.inputStream).startsWith("HTTP/1.1 200"))
+                assertEquals("xyz", socket.inputStream.readNBytes(3).decodeToString())
+                val row = fixture.awaitPath("owner", path).single().exchange
+                assertEquals(TrafficTerminationReason.Lifecycle.CAPTURE_PAUSED, row.terminalOutcome?.reason)
+                assertNull(row.response)
             }
         }
     }
@@ -320,6 +342,9 @@ class DeviceCaptureSocketEndToEndTest {
                     else -> ("payload:$path:" + payload.decodeToString()).toByteArray()
                 }
                 val contentType = if (path == "/hold/sse") "text/event-stream" else "application/json"
+                if (path == "/hold/headers") {
+                    releases.computeIfAbsent(path) { CompletableFuture() }.get(5, TimeUnit.SECONDS)
+                }
                 socket.outputStream.write("HTTP/1.1 200 OK\r\nContent-Type: $contentType\r\nContent-Length: ${body.size}\r\n\r\n".toByteArray())
                 if (path.startsWith("/hold/")) {
                     val prefixSize = if (path == "/hold/sse") "data: x\n\n".length else 1

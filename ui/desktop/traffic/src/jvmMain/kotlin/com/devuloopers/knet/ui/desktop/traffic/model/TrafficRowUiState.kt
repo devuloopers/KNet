@@ -212,6 +212,10 @@ internal val TrafficRowUiState.displayStatusLabel: String
         else -> "In Progress"
     }
 
+/** Capture ended while the source could continue sending and receiving traffic. */
+internal val ExchangeTerminalOutcome?.isCapturePaused: Boolean
+    get() = this is ExchangeTerminalOutcome.Cancelled && reason == TrafficTerminationReason.Lifecycle.CAPTURE_PAUSED
+
 /** Builds an immediate body-free Traffic projection for a suspended canonical exchange. */
 internal fun PendingBreakpoint.toTrafficRowUiState(
     descriptor: RequestDescriptor? = null,

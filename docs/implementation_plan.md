@@ -1,5 +1,80 @@
 # KNet Implementation Plan
 
+## Desktop 0.2.2 release [IN PROGRESS]
+
+Prepare `desktop-v0.2.2` from the completed Traffic, Protected Traffic and persisted GraphQL changes.
+Run the existing CI and Desktop release workflows, verify the draft's native packages and publish it.
+
+## Protected Traffic on IPv4-only Windows [COMPLETED]
+
+With IPv6 disabled on Windows, automatic tunneling fails with `upstream_connect_failed` when the
+Companion supplies an IPv6 address. The local reproduction confirmed that the same TLS hostname and
+port work over IPv4.
+
+- Reuse KNet's dual-stack routing for tunnels with a valid TLS server name. Try the original IPv6
+  address first and make IPv4 addresses for that hostname available as fallback.
+- Add a socket regression with an IPv6 CONNECT target and an IPv4-only TLS origin. Verify that
+  automatic tunneling reaches the origin and the client receives the origin's certificate.
+
+The selector and Protected Traffic socket suites passed on Windows with IPv6 disabled on Wi-Fi.
+The new socket test verified the original IPv6 target, an IPv4-only origin, the original TLS
+certificate and the forwarded payload.
+
+## Capture pause status for in-flight traffic [COMPLETED]
+
+Pause Capture ends recording for the selected source immediately while its live requests and streams
+continue forwarding. Keep the partial record and show **Capture paused** in the Traffic table and
+inspector. Present any received HTTP status independently of the capture status.
+
+- Use the existing `capture_paused` reason to distinguish a recording cut from a cancelled request.
+- Verify pauses before response headers and during an HTTP response or long-lived stream. Cover
+  partial body retention, a received HTTP status, and actual network cancellations.
+
+All seven device-capture socket cases and the targeted Traffic inspector suite passed. The client
+received complete HTTP and SSE responses after the pause, and the retained rows report the capture
+pause, any HTTP status received before it, and the partial body.
+
+## Compact Persisted Query strip in API Studio [COMPLETED]
+
+Replace the Persisted Query block with a compact two-line strip in its existing slot between the
+request bar and request tabs. Place the source status beside the title and **Import manifest** on
+the right. Show a shortened SHA-256 with a disclosure for viewing and copying the full hash.
+
+- Show **View query** when the source is available and open it in the existing read-only viewer.
+- Keep the request editor and replay behavior intact. Verify unresolved and resolved source states,
+  manifest import feedback, and the layout at narrow composer widths.
+
+The API Studio Compose tests passed, including hash expansion and copying, manifest error and
+success feedback, and opening the read-only source at a 330 px composer width.
+
+## Exact persisted GraphQL breakpoints from Traffic [COMPLETED]
+
+Add a GraphQL **Match** section to the existing breakpoint drawer. For a persisted request opened
+from Traffic, preselect **Exact persisted query** and fill in its SHA-256. Show a shortened hash
+with a disclosure for the full value and a line explaining the rule's scope before Save.
+
+- Match the hash on the captured endpoint and HTTP method without requiring a manifest or resolved
+  query source. When the request supplies an operation name, use it as an additional filter.
+- Offer verified **Operation name** matching and an explicit **All operations on this endpoint**
+  choice. Require a scope choice when the captured request lacks a usable hash or verified name.
+- Keep the rest of the drawer and existing saved rules compatible. Verify GET and POST, requests
+  sharing an endpoint with different hashes, and operations sharing a document hash.
+
+Protocol, application, Room, and Compose tests passed. A captured request with an unresolved hash
+produces an exact-match draft. Coordinator tests verify distinct hashes, operation selectors,
+methods and endpoint paths, and Room tests cover the old and new saved criteria.
+
+### Windows validation for these four changes
+
+The Windows development distribution, shared Android UI compilation and architecture checks passed.
+All 217 Traffic tests passed with test classes isolated after a Compose snapshot threading error in
+the shared test process. The broader application run had one unrelated failure in an unchanged copy
+test that invokes `/bin/sh` on Windows. The 32 targeted application tests passed. The TLS regression
+used local sockets with IPv6 disabled on Wi-Fi. Physical Companion verification remains open.
+
+Logs are in `build/four-pending-validation.log`, `build/four-pending-ui-retest.log`,
+`build/four-pending-final.log` and `build/four-pending-traffic-isolated.log`.
+
 ## Traffic forwarding status width [COMPLETED]
 
 The running status uses its full label and endpoint width in the shared toolbar scroll area.

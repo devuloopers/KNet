@@ -1,6 +1,12 @@
 package com.devuloopers.knet.data.desktop.capture
 
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.breakpoint.GraphQLBreakpointMatch
+import com.devuloopers.knet.application.contract.breakpoint.GraphQLBreakpointScope
+import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftResult
+import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestResult
 import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUseCase
@@ -13,6 +19,7 @@ import com.devuloopers.knet.domain.graphql.GraphQLHttpParameter
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter
 import com.devuloopers.knet.engine.proxy.KNetProxyServer
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointExtension
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -42,7 +49,11 @@ class GraphQLHttpCaptureReplayTest {
     @Test fun `cancelling a GET before response headers closes its transport without replaying it`() =
         exercise(HttpMethod.GET, HttpVersionPreference.HTTP_1_1, cancel = true)
 
-    private fun exercise(method: HttpMethod, version: HttpVersionPreference = HttpVersionPreference.AUTO, cancel: Boolean = false) = runBlocking {
+    @Test fun `captured hash-only POST drafts an exact breakpoint and replays the original envelope`() =
+        exercise(HttpMethod.POST, persisted = true)
+
+    private fun exercise(method: HttpMethod, version: HttpVersionPreference = HttpVersionPreference.AUTO,
+        cancel: Boolean = false, persisted: Boolean = false) = runBlocking {
         data class Observed(val method: String, val target: String, val marker: String?, val body: String)
         val received = ConcurrentLinkedQueue<Observed>()
         val observed = CompletableDeferred<Unit>()
@@ -75,7 +86,12 @@ class GraphQLHttpCaptureReplayTest {
         val target = if (method == HttpMethod.GET) "/startup?tracking=a%2bb&flag&query=query%20BootStrapQuery%20%7B%20bootstrap%20%7B%20id%20%7D%20%7D&variables=%7B%22device%22%3A%22ANDROID%22%7D&tracking=2"
             else "/startup?tracking=a%2bb&tracking=2"
         val url = "http://127.0.0.1:${origin.address.port}$target"
-        val payload = if (method == HttpMethod.GET) "" else " {\"query\":\"query BootStrapQuery { bootstrap { id } }\",\"variables\":{\"device\":\"ANDROID\"},\"client\":{\"id\":7}} "
+        val hash = "a1".repeat(32)
+        val payload = when {
+            method == HttpMethod.GET -> ""
+            persisted -> """{"operationName":"BootStrapQuery","extensions":{"persistedQuery":{"version":1,"sha256Hash":"$hash"}}}"""
+            else -> " {\"query\":\"query BootStrapQuery { bootstrap { id } }\",\"variables\":{\"device\":\"ANDROID\"},\"client\":{\"id\":7}} "
+        }
         val headers = mapOf("X-Fixture" to "capture-replay", "Content-Type" to "application/json")
         proxy.start()
         try {
@@ -106,7 +122,20 @@ class GraphQLHttpCaptureReplayTest {
             assertEquals(payload, prepared.bodyPayload)
             val facts = GraphQLHttpRequestFormatter.inspect(prepared.method.token, prepared.url,
                 body = prepared.bodyPayload.encodeToByteArray())!!
-            assertEquals("BootStrapQuery", facts.selectedOperation?.name)
+            if (persisted) {
+                assertEquals(hash, facts.persistedQuery?.hash?.value)
+                assertNull(facts.selectedOperation)
+                val registry = BreakpointProtocolRegistry(listOf(GraphQLBreakpointExtension()))
+                val draft = assertIs<PrepareBreakpointRuleDraftResult.Found>(
+                    PrepareBreakpointRuleDraftUseCase(LoadTrafficExchangeDetailsUseCase(query), registry).execute(id),
+                ).draft
+                val values = draft.protocolValues.associate { it.fieldId to it.value }
+                assertEquals(GraphQLBreakpointScope.EXACT.token, values[GraphQLBreakpointMatch.scopeField])
+                assertEquals(hash, values[GraphQLBreakpointMatch.hashField])
+                assertEquals("BootStrapQuery", values[GraphQLBreakpointMatch.requestOperationField])
+                assertEquals(method, draft.rule.method)
+                assertEquals("http://127.0.0.1/startup", draft.rule.urlPattern)
+            } else assertEquals("BootStrapQuery", facts.selectedOperation?.name)
             val replay = execute(prepared.url, prepared.method, prepared.headers.toMap(), queryParams = prepared.queryParams,
                 body = if (prepared.bodyPayload.isEmpty()) OutboundRequestBody.None else OutboundRequestBody.GraphQl(prepared.bodyPayload), proxyPort = port, httpVersionPreference = version)
             assertEquals(200, replay.statusCode)

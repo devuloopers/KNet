@@ -17,6 +17,10 @@ when it has captured the complete matching source or the user explicitly imports
 - Named breakpoints and operation-specific network conditions use only verified parsed documents. A supplied
   `operationName` alone never proves a query's name or type. Unknown, invalid, mismatched or incomplete source
   cannot match a named operation. Existing broad destination/transport rules still apply.
+- Adding a breakpoint from a persisted request defaults to **Exact persisted query** and matches the SHA-256
+  at the captured endpoint and HTTP method. An explicit request operation selector narrows that hash when
+  present. Query source and manifest lookup are independent of hash matching. Choose endpoint-wide matching
+  explicitly when creating a broad GraphQL rule.
 - GET retains query-only method constraints after resolution. A resolved mutation/subscription is viewable with
   a diagnostic and does not become a valid named GET match.
 - Batch entries are resolved independently. If any persisted entry is unresolved, the batch cannot guess named
@@ -30,7 +34,8 @@ unchanged. Response data and errors continue through the ordinary response viewe
 
 ## API Studio
 
-Open a captured persisted request in API Studio. The persisted-query toolbar shows its SHA-256 and source.
+Open a captured persisted request in API Studio. The compact strip shows the query source and shortened
+SHA-256. Expand the hash to view or copy the complete value.
 **View query** opens a read-only viewer when source is known. **Import manifest** selects a local JSON file for
 the current absolute HTTP(S) endpoint. No query text is inserted into the editable Query field for hash-only data.
 

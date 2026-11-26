@@ -1074,7 +1074,8 @@ internal class KNetStreamingProxyHandler(
     ): Future<ClassifiedConnectRoute> {
         val promise: Promise<ClassifiedConnectRoute> = context.executor().newPromise()
         val capture = startOpaqueTlsCapture(context, host, port, metadata.serverName, decision, metadata)
-        upstreamAddressResolver.resolve(host, port, fallbackDnsHost = null)
+        val route = UpstreamRouteHostSelector.selectClassifiedTunnel(host, metadata.serverName)
+        upstreamAddressResolver.resolve(route.primaryHost, port, route.fallbackDnsHost)
             .whenComplete { resolvedRoute, resolutionFailure ->
                 context.executor().execute {
                     if (!context.channel().isActive) {

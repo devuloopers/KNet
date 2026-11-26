@@ -4,11 +4,15 @@ import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDe
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolExtension
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointRuleSuggestionInput
 import com.devuloopers.knet.application.contract.breakpoint.CompiledProtocolCriteria
+import com.devuloopers.knet.application.contract.breakpoint.GraphQLBreakpointMatch
+import com.devuloopers.knet.application.contract.breakpoint.GraphQLBreakpointScope
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldId
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaOption
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolInspectionInput
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolObservation
+import com.devuloopers.knet.domain.graphql.GraphQLQueryHash
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
@@ -19,28 +23,23 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
 /** Public identities used by GraphQL breakpoint criteria and extension registration. */
 object GraphQLBreakpointProtocol {
     /** Stable GraphQL extension identity. */
-    val id: BreakpointProtocolId = BreakpointProtocolId("graphql")
+    val id: BreakpointProtocolId = GraphQLBreakpointMatch.protocolId
 
     /** Optional operation-name editor field. */
-    val operationNameFieldId: ProtocolCriteriaFieldId = ProtocolCriteriaFieldId("operation-name")
+    val operationNameFieldId: ProtocolCriteriaFieldId = GraphQLBreakpointMatch.operationNameField
 }
-
-/** One bounded GraphQL operation fact retained for live matching. */
-private data class GraphQLBreakpointOperation(
-    val name: String?,
-    val type: GraphQLOperationType,
-)
 
 /** Compact GraphQL request facts retained across request and response breakpoint phases. */
 private data class GraphQLBreakpointObservation(
-    val operations: List<GraphQLBreakpointOperation>,
+    val verifiedNames: List<String?>,
+    val hash: GraphQLQueryHash?,
+    val requestOperationName: String?,
 ) : ProtocolObservation {
     override val protocolId: BreakpointProtocolId = GraphQLBreakpointProtocol.id
 }
@@ -60,14 +59,26 @@ class GraphQLBreakpointExtension(
     override val definition: BreakpointProtocolDefinition = BreakpointProtocolDefinition(
         protocolId = GraphQLBreakpointProtocol.id,
         displayName = "GraphQL",
-        criteriaVersion = CRITERIA_VERSION,
+        criteriaVersion = EXACT_CRITERIA_VERSION,
         fields = listOf(
+            ProtocolCriteriaFieldDefinition.Choice(
+                id = GraphQLBreakpointMatch.scopeField,
+                label = "Match",
+                options = GraphQLBreakpointScope.entries.map { ProtocolCriteriaOption(it.token, it.label) },
+                defaultValue = GraphQLBreakpointScope.CHOOSE.token,
+            ),
             ProtocolCriteriaFieldDefinition.Text(
                 id = GraphQLBreakpointProtocol.operationNameFieldId,
                 label = "Operation Name",
-                description = "Leave empty to pause every GraphQL operation matching the HTTP filters.",
                 placeholder = "e.g. GetUserProfile or UpdateCart",
-                optional = true,
+            ),
+            ProtocolCriteriaFieldDefinition.Text(
+                id = GraphQLBreakpointMatch.hashField,
+                label = "SHA-256",
+            ),
+            ProtocolCriteriaFieldDefinition.Text(
+                id = GraphQLBreakpointMatch.requestOperationField,
+                label = "Operation name from request",
             ),
         ),
     )
@@ -75,7 +86,7 @@ class GraphQLBreakpointExtension(
     override fun compile(criteria: ProtocolMatchCriteria): CompiledProtocolCriteria? {
         if (criteria.protocolId != GraphQLBreakpointProtocol.id) return null
         val decoded = decodeCriteria(criteria.encodedPayload) ?: return null
-        return GraphQLCompiledCriteria(decoded.operationName)
+        return GraphQLCompiledCriteria(decoded)
     }
 
     override fun inspect(input: ProtocolInspectionInput): ProtocolObservation? {
@@ -95,15 +106,14 @@ class GraphQLBreakpointExtension(
                 ?.takeIf { input.requestBodyComplete }
                 ?.copyBytes(),
         ) ?: return null
-        val operationName = observation.operations.singleOrNull()?.name.orEmpty()
-        return createCriteria(
-            listOf(
-                ProtocolCriteriaValue(
-                    fieldId = GraphQLBreakpointProtocol.operationNameFieldId,
-                    value = operationName,
-                ),
-            ),
-        )
+        val verifiedName = observation.verifiedNames.singleOrNull()
+        val hash = observation.hash
+        return when {
+            hash != null -> encodeExact(hash, observation.requestOperationName, verifiedName)
+            verifiedName != null -> encodeLegacy(verifiedName)
+            // The draft remains GraphQL, but its placeholder cannot match any request.
+            else -> encode(buildJsonObject { put(VERSION_FIELD, EXACT_CRITERIA_VERSION) })
+        }
     }
 
     private fun inspectRequest(
@@ -115,84 +125,136 @@ class GraphQLBreakpointExtension(
             it.name.value.equals(CONTENT_TYPE_HEADER, ignoreCase = true)
         }?.value.orEmpty()
         val document = parser.decodeHttp(request.head.method.token, absoluteUrl, contentType, bodyBytes, learnCaptured = true, headers = request.head.headers.map { it.name.value to it.value }) ?: return null
-        return GraphQLBreakpointObservation(document.matchableOperations.map {
-            GraphQLBreakpointOperation(it.name, it.type)
-        })
+        return GraphQLBreakpointObservation(
+            verifiedNames = document.matchableOperations.map { it.name },
+            hash = document.persistedQuery?.hash?.takeIf { document.diagnostic == null },
+            requestOperationName = document.suppliedOperationName?.takeIf(String::isNotBlank),
+        )
     }
 
     override fun editorValues(criteria: ProtocolMatchCriteria): List<ProtocolCriteriaValue> {
-        val operationName = if (criteria.protocolId == GraphQLBreakpointProtocol.id) {
-            decodeCriteria(criteria.encodedPayload)?.operationName.orEmpty()
-        } else {
-            ""
+        if (criteria.protocolId != GraphQLBreakpointProtocol.id) return emptyList()
+        val decoded = decodeCriteria(criteria.encodedPayload) ?: return emptyList()
+        val name = ProtocolCriteriaValue(GraphQLBreakpointMatch.operationNameField, decoded.operationName.orEmpty())
+        return when (decoded.scope) {
+            GraphQLBreakpointScope.EXACT -> listOf(
+                ProtocolCriteriaValue(GraphQLBreakpointMatch.scopeField, decoded.scope.token),
+                ProtocolCriteriaValue(GraphQLBreakpointMatch.hashField, checkNotNull(decoded.hash).value),
+                ProtocolCriteriaValue(GraphQLBreakpointMatch.requestOperationField, decoded.requestOperationName.orEmpty()),
+                name,
+            )
+            GraphQLBreakpointScope.CHOOSE -> listOf(ProtocolCriteriaValue(GraphQLBreakpointMatch.scopeField, decoded.scope.token))
+            else -> listOf(name)
         }
-        return listOf(
-            ProtocolCriteriaValue(GraphQLBreakpointProtocol.operationNameFieldId, operationName),
-        )
     }
 
     override fun createCriteria(values: List<ProtocolCriteriaValue>): ProtocolMatchCriteria? {
-        if (values.any { it.fieldId != GraphQLBreakpointProtocol.operationNameFieldId }) return null
-        val operationName = values.firstOrNull {
-            it.fieldId == GraphQLBreakpointProtocol.operationNameFieldId
-        }?.value?.trim()?.takeIf(String::isNotEmpty)?.also { name ->
-            if (name.length > MAXIMUM_OPERATION_NAME_CHARACTERS || !GRAPHQL_NAME.matches(name)) return null
+        val entered = values.associate { it.fieldId to it.value.trim() }
+        if (entered.size != values.size || entered.keys.any { id -> definition.fields.none { it.id == id } }) return null
+        val operation = entered[GraphQLBreakpointMatch.operationNameField]?.takeIf(String::isNotEmpty)
+        val scopeToken = entered[GraphQLBreakpointMatch.scopeField]
+        if (scopeToken == null) {
+            // Preserve the programmatic v1 editor contract and older saved rule semantics.
+            if (entered.keys.any { it != GraphQLBreakpointMatch.operationNameField } ||
+                operation != null && !GraphQLBreakpointMatch.isOperationName(operation)) return null
+            return encodeLegacy(operation)
         }
-        val payload = buildJsonObject {
-            put(VERSION_FIELD, CRITERIA_VERSION)
-            put(OPERATION_NAME_FIELD, operationName?.let(::JsonPrimitive) ?: JsonNull)
+        return when (GraphQLBreakpointScope.entries.firstOrNull { it.token == scopeToken }) {
+            GraphQLBreakpointScope.ENDPOINT -> encodeLegacy(null)
+            GraphQLBreakpointScope.OPERATION -> operation?.takeIf(GraphQLBreakpointMatch::isOperationName)?.let(::encodeLegacy)
+            GraphQLBreakpointScope.EXACT -> {
+                val hash = entered[GraphQLBreakpointMatch.hashField]?.let(GraphQLBreakpointMatch::parseHash) ?: return null
+                val requestName = entered[GraphQLBreakpointMatch.requestOperationField]?.takeIf(String::isNotEmpty)
+                if (requestName != null && !GraphQLBreakpointMatch.isOperationName(requestName)) return null
+                encodeExact(hash, requestName, operation?.takeIf(GraphQLBreakpointMatch::isOperationName))
+            }
+            GraphQLBreakpointScope.CHOOSE, null -> null
         }
-        return ProtocolMatchCriteria(
-            protocolId = GraphQLBreakpointProtocol.id,
-            encodedPayload = payload.toString(),
-        )
     }
+
+    private fun encodeLegacy(operation: String?): ProtocolMatchCriteria = encode(buildJsonObject {
+        put(VERSION_FIELD, LEGACY_CRITERIA_VERSION)
+        put(OPERATION_NAME_FIELD, operation?.let(::JsonPrimitive) ?: JsonNull)
+    })
+
+    private fun encodeExact(hash: GraphQLQueryHash, requestName: String?, operation: String?): ProtocolMatchCriteria =
+        encode(buildJsonObject {
+            put(VERSION_FIELD, EXACT_CRITERIA_VERSION)
+            put(HASH_FIELD, hash.value)
+            if (requestName != null) put(REQUEST_OPERATION_FIELD, requestName)
+            if (operation != null) put(OPERATION_NAME_FIELD, operation)
+        })
+
+    private fun encode(payload: JsonObject): ProtocolMatchCriteria =
+        ProtocolMatchCriteria(GraphQLBreakpointProtocol.id, payload.toString())
 
     private fun decodeCriteria(payload: String): GraphQLCriteria? {
         if (payload.isBlank() || payload.length > MAXIMUM_CRITERIA_CHARACTERS) return null
         val root = runCatching { json.parseToJsonElement(payload) as? JsonObject }.getOrNull()
             ?: return null
-        if (root.keys.any { it !in CRITERIA_FIELDS }) return null
-        if ((root[VERSION_FIELD] as? JsonPrimitive)?.intOrNull != CRITERIA_VERSION) return null
-        val operationName = when (val operationElement = root[OPERATION_NAME_FIELD]) {
-            null, JsonNull -> null
-            else -> (operationElement as? JsonPrimitive)?.contentOrNull
-                ?.trim()
-                ?.takeIf(String::isNotEmpty)
-                ?: return null
-        }
-        if (operationName != null &&
-            (operationName.length > MAXIMUM_OPERATION_NAME_CHARACTERS || !GRAPHQL_NAME.matches(operationName))
-        ) {
-            return null
-        }
-        return GraphQLCriteria(operationName)
+        return runCatching {
+            when ((root[VERSION_FIELD] as? JsonPrimitive)?.intOrNull) {
+                LEGACY_CRITERIA_VERSION -> {
+                    require(root.keys.all { it in LEGACY_FIELDS })
+                    val operation = root.operationName(OPERATION_NAME_FIELD)
+                    GraphQLCriteria(if (operation == null) GraphQLBreakpointScope.ENDPOINT else GraphQLBreakpointScope.OPERATION,
+                        operationName = operation)
+                }
+                EXACT_CRITERIA_VERSION -> {
+                    require(root.keys.all { it in EXACT_FIELDS })
+                    if (root.keys == setOf(VERSION_FIELD)) GraphQLCriteria(GraphQLBreakpointScope.CHOOSE)
+                    else {
+                        val hash = root[HASH_FIELD] as? JsonPrimitive ?: return null
+                        require(hash.isString)
+                        GraphQLCriteria(GraphQLBreakpointScope.EXACT, GraphQLQueryHash(hash.content),
+                            root.operationName(REQUEST_OPERATION_FIELD), root.operationName(OPERATION_NAME_FIELD))
+                    }
+                }
+                else -> null
+            }
+        }.getOrNull()
     }
 
-    private data class GraphQLCriteria(val operationName: String?)
+    private fun JsonObject.operationName(field: String): String? {
+        val value = this[field] ?: return null
+        if (value == JsonNull) return null
+        require(value is JsonPrimitive && value.isString)
+        return value.content.trim().also { require(GraphQLBreakpointMatch.isOperationName(it)) }
+    }
 
-    private class GraphQLCompiledCriteria(
-        private val operationName: String?,
-    ) : CompiledProtocolCriteria {
+    private data class GraphQLCriteria(
+        val scope: GraphQLBreakpointScope,
+        val hash: GraphQLQueryHash? = null,
+        val requestOperationName: String? = null,
+        val operationName: String? = null,
+    )
+
+    private class GraphQLCompiledCriteria(private val criteria: GraphQLCriteria) : CompiledProtocolCriteria {
         override val protocolId: BreakpointProtocolId = GraphQLBreakpointProtocol.id
+        override val requiresExactEndpoint: Boolean = criteria.scope == GraphQLBreakpointScope.EXACT
 
         override fun matches(observation: ProtocolObservation?): Boolean {
             val graphQL = observation as? GraphQLBreakpointObservation ?: return false
-            return operationName == null || graphQL.operations.any { it.name == operationName }
+            return when (criteria.scope) {
+                GraphQLBreakpointScope.CHOOSE -> false
+                GraphQLBreakpointScope.ENDPOINT -> true
+                GraphQLBreakpointScope.OPERATION -> criteria.operationName in graphQL.verifiedNames
+                GraphQLBreakpointScope.EXACT -> graphQL.hash == criteria.hash &&
+                    (criteria.requestOperationName == null || graphQL.requestOperationName == criteria.requestOperationName)
+            }
         }
     }
 
     private companion object {
-        const val CRITERIA_VERSION = 1
+        const val LEGACY_CRITERIA_VERSION = 1
+        const val EXACT_CRITERIA_VERSION = 2
         const val VERSION_FIELD = "version"
         const val OPERATION_NAME_FIELD = "operationName"
+        const val HASH_FIELD = "sha256"
+        const val REQUEST_OPERATION_FIELD = "requestOperationName"
         const val CONTENT_TYPE_HEADER = "Content-Type"
-        const val GRAPHQL_PATH_HINT = "graphql"
-        const val GRAPHQL_MEDIA_HINT = "graphql"
-        const val OPERATION_NAME_QUERY_PARAMETER = "operationName"
-        const val MAXIMUM_OPERATION_NAME_CHARACTERS = 256
         const val MAXIMUM_CRITERIA_CHARACTERS = 4_096
-        val CRITERIA_FIELDS = setOf(VERSION_FIELD, OPERATION_NAME_FIELD)
-        val GRAPHQL_NAME = Regex("^[_A-Za-z][_0-9A-Za-z]*$")
+        val LEGACY_FIELDS = setOf(VERSION_FIELD, OPERATION_NAME_FIELD)
+        val EXACT_FIELDS = LEGACY_FIELDS + setOf(HASH_FIELD, REQUEST_OPERATION_FIELD)
     }
 }

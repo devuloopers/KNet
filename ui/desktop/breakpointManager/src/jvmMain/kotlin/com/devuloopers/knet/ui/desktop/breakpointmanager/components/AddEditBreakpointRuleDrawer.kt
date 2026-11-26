@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDefinition
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldId
+import com.devuloopers.knet.application.contract.breakpoint.GraphQLBreakpointMatch
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
@@ -122,9 +124,15 @@ fun AddEditBreakpointRuleDrawer(
             mutableStateOf(initialProtocolValues)
         }
         val selectedProtocol = protocolDefinitions.firstOrNull { it.protocolId == selectedProtocolId }
+        val graphQLMatch = selectedProtocol?.takeIf { definition ->
+            definition.protocolId == GraphQLBreakpointMatch.protocolId &&
+                definition.fields.any { it.id == GraphQLBreakpointMatch.scopeField }
+        }?.let { GraphQLMatchEditorState.from(protocolValues) }
         val parsedPort = portInput.toIntOrNull()?.takeIf { it in 1..65_535 }
         val isPortValid = portInput.isBlank() || parsedPort != null
         val portCriteria = parsedPort?.let(BreakpointPortCriteria::Exact) ?: BreakpointPortCriteria.Any
+        val canSave = !saving && urlPattern.isNotBlank() && isPortValid && selectedProtocol != null &&
+            graphQLMatch?.isComplete != false
         val drawerTitle = if (initialIsEditingExistingRule) "Edit Breakpoint Rule" else "Add Breakpoint Rule"
 
         Column(
@@ -239,8 +247,10 @@ fun AddEditBreakpointRuleDrawer(
                     },
                     isSelected = { definition -> selectedProtocolId == definition.protocolId },
                     onSelect = { definition ->
-                        selectedProtocolId = definition.protocolId
-                        protocolValues = definition.defaultValues()
+                        if (selectedProtocolId != definition.protocolId) {
+                            selectedProtocolId = definition.protocolId
+                            protocolValues = definition.defaultValues()
+                        }
                     },
                     minimumItemWidth = 120.dp,
                     maximumItemWidth = 240.dp,
@@ -250,14 +260,21 @@ fun AddEditBreakpointRuleDrawer(
                 )
             }
 
-            selectedProtocol?.fields.orEmpty().forEach { field ->
-                ProtocolCriteriaField(
-                    field = field,
-                    value = protocolValues.valueFor(field),
-                    onValueChange = { value ->
-                        protocolValues = protocolValues.withValue(field, value)
-                    },
-                )
+            if (graphQLMatch != null) {
+                val initialHash = GraphQLMatchEditorState.from(initialProtocolValues).hash
+                GraphQLBreakpointMatchSection(graphQLMatch, initialHash != null) { field, value ->
+                    protocolValues = protocolValues.withValue(field, value)
+                }
+            } else {
+                selectedProtocol?.fields.orEmpty().forEach { field ->
+                    ProtocolCriteriaField(
+                        field = field,
+                        value = protocolValues.valueFor(field),
+                        onValueChange = { value ->
+                            protocolValues = protocolValues.withValue(field.id, value)
+                        },
+                    )
+                }
             }
 
             // HTTP Method Selector (ALL + Enum Values)
@@ -356,7 +373,7 @@ fun AddEditBreakpointRuleDrawer(
                 }
                 KNetButton(
                     onClick = {
-                        if (urlPattern.isNotBlank() && isPortValid && selectedProtocol != null) {
+                        if (canSave) {
                             onSave(
                                 urlPattern.trim(),
                                 portCriteria,
@@ -369,7 +386,7 @@ fun AddEditBreakpointRuleDrawer(
                         }
                     },
                     variant = ButtonVariant.Primary,
-                    enabled = !saving && urlPattern.isNotBlank() && isPortValid && selectedProtocol != null,
+                    enabled = canSave,
                     loading = saving,
                 ) {
                     Text(if (initialIsEditingExistingRule) "Save rule" else "Save and enable")
@@ -583,7 +600,7 @@ private fun List<ProtocolCriteriaValue>.valueFor(field: ProtocolCriteriaFieldDef
     }
 
 private fun List<ProtocolCriteriaValue>.withValue(
-    field: ProtocolCriteriaFieldDefinition,
+    field: ProtocolCriteriaFieldId,
     value: String,
 ): List<ProtocolCriteriaValue> =
-    filterNot { it.fieldId == field.id } + ProtocolCriteriaValue(field.id, value)
+    filterNot { it.fieldId == field } + ProtocolCriteriaValue(field, value)

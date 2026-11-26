@@ -176,6 +176,9 @@ public interface CompiledProtocolCriteria {
     /** Protocol extension that owns this predicate. */
     public val protocolId: BreakpointProtocolId
 
+    /** Uses the rule URL as a literal endpoint, excluding query parameters and fragments. */
+    public val requiresExactEndpoint: Boolean get() = false
+
     /** Returns whether the extension-owned [observation] satisfies the compiled predicate. */
     public fun matches(observation: ProtocolObservation?): Boolean
 }

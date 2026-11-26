@@ -33,9 +33,10 @@ data class BreakpointRule(
  * protocols. A coordinator can reuse this instance without recompiling the URL expression for
  * every intercepted exchange.
  */
-class BreakpointTransportMatcher(private val rule: BreakpointRule) {
+class BreakpointTransportMatcher(private val rule: BreakpointRule, requiresExactEndpoint: Boolean = false) {
     private val methodToken = rule.method?.token
-    private val urlExpression = compileUrlExpression(rule.urlPattern)
+    private val endpoint = rule.urlPattern.trim().endpointKey().takeIf { requiresExactEndpoint }
+    private val urlExpression = if (requiresExactEndpoint) null else compileUrlExpression(rule.urlPattern)
 
     /** Returns whether the rule includes the concrete interception [phase]. */
     fun includes(phase: BreakpointPhase): Boolean =
@@ -51,14 +52,25 @@ class BreakpointTransportMatcher(private val rule: BreakpointRule) {
             includes(phase) &&
             (methodToken == null || methodToken.equals(method, ignoreCase = true)) &&
             rule.portCriteria.matches(target.port) &&
-            (urlExpression.containsMatchIn(target.canonicalUrl) ||
-                urlExpression.containsMatchIn(target.portlessUrl))
+            (matchesUrl(target.canonicalUrl) || matchesUrl(target.portlessUrl))
 
     /** Compatibility convenience for callers whose input has no independent port representation. */
     fun matches(url: String, method: String, phase: BreakpointPhase): Boolean =
         matches(BreakpointTransportTarget(url, url, null), method, phase)
 
+    private fun matchesUrl(url: String): Boolean =
+        urlExpression?.containsMatchIn(url) ?: (endpoint == url.endpointKey())
+
     private companion object {
+        fun String.endpointKey(): String {
+            val url = substringBefore('#').substringBefore('?')
+            val separator = url.indexOf("://")
+            if (separator < 0) return url
+            val pathStart = url.indexOf('/', separator + 3)
+            return if (pathStart == -1) "${url.lowercase()}/"
+                else url.substring(0, pathStart).lowercase() + url.substring(pathStart)
+        }
+
         fun compileUrlExpression(pattern: String): Regex {
             if (pattern == "*" || pattern == ".*") return Regex(".*", RegexOption.IGNORE_CASE)
             val expression = if ('*' in pattern && ".*" !in pattern) {

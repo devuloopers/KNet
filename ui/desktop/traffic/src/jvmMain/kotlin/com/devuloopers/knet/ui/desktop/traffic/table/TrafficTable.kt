@@ -87,6 +87,8 @@ import com.devuloopers.knet.ui.desktop.traffic.model.ResolvedTrafficColumnLayout
 import com.devuloopers.knet.ui.desktop.traffic.model.resolveTrafficColumnLayout
 import com.devuloopers.knet.ui.desktop.traffic.model.toTrafficHostLabel
 import com.devuloopers.knet.ui.desktop.traffic.model.displayStatusLabel
+import com.devuloopers.knet.ui.desktop.traffic.model.isCapturePaused
+import com.devuloopers.knet.ui.core.components.tooltip.KNetTooltipHost
 
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
@@ -734,14 +736,22 @@ private fun TableRowItem(
 
         // Status
         if (columnVisibility.isVisible(TrafficColumn.STATUS)) {
-            Box(
+            Row(
                 modifier = Modifier
                     .width(columnLayout.widthDp(TrafficColumn.STATUS).dp)
                     .padding(start = spacing.xs, end = spacing.md),
-                contentAlignment = Alignment.CenterStart,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.xs),
             ) {
+                val capturePaused = item.terminalOutcome.isCapturePaused
+                if (capturePaused) {
+                    KNetTooltipHost("Capture paused · Partial recording") {
+                        Icon(KNetIcons.Pause, contentDescription = "Capture paused",
+                            modifier = Modifier.size(KNetTheme.dimensions.iconSizeSmall), tint = themeColors.semantic.warning)
+                    }
+                }
                 Text(
-                    text = item.displayStatusLabel,
+                    text = if (capturePaused && item.status == 0) "Paused" else item.displayStatusLabel,
                     style = typography.codeSmall.copy(color = statusColor, fontWeight = FontWeight.Medium),
                     maxLines = 1,
                     softWrap = false,

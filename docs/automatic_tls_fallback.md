@@ -20,6 +20,10 @@ repair an already-rejected connection. A client must open another connection, au
 retry. That connection uses the original server certificate through a raw encrypted tunnel. KNet retains opaque
 metadata and actual network shaping; it cannot read encrypted HTTP results or claim a purchase succeeded.
 
+When a classified tunnel targets an IPv6 literal, a valid TLS server name can supply additional DNS
+candidates on the same port. The original address is attempted first. On an IPv4-only desktop, a reachable
+IPv4 candidate can carry the original TLS connection.
+
 Selection order is saved manual/imported rule, then eligible temporary decision under the global automatic Inspect
 mode, then global default. Explicit Inspect never silently falls back, even after another rejection. Explicit Tunnel
 and Block also remain authoritative. Existing saved matcher precedence is unchanged.

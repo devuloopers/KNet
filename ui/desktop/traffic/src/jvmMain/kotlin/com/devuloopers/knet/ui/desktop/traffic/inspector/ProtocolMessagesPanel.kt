@@ -96,7 +96,7 @@ internal fun ProtocolMessagesPanel(
                     Modifier.fillMaxWidth(), bold = true)
                 KNetInspectorFields(buildList {
                     add(KNetInspectorField("Direction", message.direction.displayName()))
-                    add(KNetInspectorField("State", message.state.displayName()))
+                    add(KNetInspectorField("State", message.displayState()))
                     add(KNetInspectorField("Captured size", formatBytes(message.observedBytes)))
                     presentation?.fields.orEmpty().forEach { add(KNetInspectorField(it.label, it.value, true)) }
                     presentation?.schemaName?.takeIf { presentation.fields.isEmpty() }?.let {
@@ -133,7 +133,7 @@ internal fun ProtocolMessagesPanel(
 private fun ProtocolMessageRow(message: ProtocolMessageSnapshot, selected: Boolean, onClick: () -> Unit) {
     val colors = KNetTheme.colors
     val spacing = KNetTheme.spacing
-    val stateColor = when (message.state) {
+    val stateColor = if (message.capturePaused) colors.semantic.warning else when (message.state) {
         ProtocolMessageState.COMPLETE -> colors.textMuted
         ProtocolMessageState.IN_PROGRESS, ProtocolMessageState.TRUNCATED -> colors.semantic.warning
         ProtocolMessageState.FAILED, ProtocolMessageState.CANCELLED -> colors.semantic.error
@@ -145,7 +145,7 @@ private fun ProtocolMessageRow(message: ProtocolMessageSnapshot, selected: Boole
             MessageText(message.direction.displayName(), Modifier.weight(1f), color = colors.accent)
         }
         MessageText(message.kind.displayName(), Modifier.fillMaxWidth(), bold = true)
-        MessageText("${formatBytes(message.observedBytes)} · ${message.state.displayName()}", Modifier.fillMaxWidth(), color = stateColor)
+        MessageText("${formatBytes(message.observedBytes)} · ${message.displayState()}", Modifier.fillMaxWidth(), color = stateColor)
     }
 }
 
@@ -159,6 +159,12 @@ private fun TrafficDirection.displayName(): String = when (this) {
     TrafficDirection.CLIENT_TO_SERVER -> "Sent"
     TrafficDirection.SERVER_TO_CLIENT -> "Received"
 }
+
+private val ProtocolMessageSnapshot.capturePaused: Boolean
+    get() = terminationReason == com.devuloopers.knet.traffic.model.TrafficTerminationReason.Lifecycle.CAPTURE_PAUSED
+
+private fun ProtocolMessageSnapshot.displayState(): String =
+    if (capturePaused) "Capture Paused" else state.displayName()
 
 private fun ProtocolMessageState.displayName(): String = when (this) {
     ProtocolMessageState.IN_PROGRESS -> "In progress"

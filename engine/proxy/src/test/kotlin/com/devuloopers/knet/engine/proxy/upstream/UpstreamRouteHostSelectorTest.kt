@@ -4,6 +4,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class UpstreamRouteHostSelectorTest {
+    @Test
+    fun `classified tunnels add only a valid DNS name to an IPv6 literal route`() {
+        val target = "2001:db8::10"
+        assertEquals(UpstreamRouteHostSelection(target, "origin.example"),
+            UpstreamRouteHostSelector.selectClassifiedTunnel(target, "Origin.Example"))
+        for (name in listOf(null, "https://origin.example", "127.0.0.1")) {
+            assertEquals(UpstreamRouteHostSelection(target, null), UpstreamRouteHostSelector.selectClassifiedTunnel(target, name))
+        }
+        assertEquals(UpstreamRouteHostSelection("192.0.2.10", null),
+            UpstreamRouteHostSelector.selectClassifiedTunnel("192.0.2.10", "origin.example"))
+    }
 
     @Test
     fun `tls dns name supplements an ipv6 CONNECT literal`() {

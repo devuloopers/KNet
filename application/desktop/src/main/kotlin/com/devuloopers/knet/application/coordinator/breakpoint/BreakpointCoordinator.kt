@@ -517,7 +517,7 @@ public class BreakpointCoordinator(
         val protocolCriteria: CompiledProtocolCriteria,
         val interceptionUnit: BreakpointInterceptionUnit,
     ) {
-        private val transportMatcher = BreakpointTransportMatcher(definition)
+        private val transportMatcher = BreakpointTransportMatcher(definition, protocolCriteria.requiresExactEndpoint)
 
         fun includes(phase: BreakpointPhase): Boolean = transportMatcher.includes(phase)
 

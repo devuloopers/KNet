@@ -2,6 +2,8 @@ package com.devuloopers.knet.data.desktop.rules.repository
 
 import com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.breakpoint.GraphQLBreakpointMatch
+import com.devuloopers.knet.application.contract.breakpoint.GraphQLBreakpointScope
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
@@ -18,8 +20,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class RulesRepositoryProtocolCriteriaTest {
-    @Test
-    fun `Room round trip preserves an extension-owned criteria envelope without protocol branches`() = runTest {
+    @Test fun `Room round trip preserves an extension-owned operation-name criterion`() = roundTrip(exact = false)
+
+    @Test fun `Room round trip preserves the APQ hash and captured operation selector`() = roundTrip(exact = true)
+
+    private fun roundTrip(exact: Boolean) = runTest {
         val root = Files.createTempDirectory("knet-protocol-rule-").toFile()
         val database = DatabaseFactory.create(root.resolve("rules.db"))
         try {
@@ -33,12 +38,11 @@ class RulesRepositoryProtocolCriteriaTest {
             )
             val criteria = requireNotNull(
                 extension.createCriteria(
-                    listOf(
-                        ProtocolCriteriaValue(
-                            GraphQLBreakpointProtocol.operationNameFieldId,
-                            "GetProfile",
-                        ),
-                    ),
+                    if (exact) listOf(
+                        ProtocolCriteriaValue(GraphQLBreakpointMatch.scopeField, GraphQLBreakpointScope.EXACT.token),
+                        ProtocolCriteriaValue(GraphQLBreakpointMatch.hashField, "5a".repeat(32)),
+                        ProtocolCriteriaValue(GraphQLBreakpointMatch.requestOperationField, "GetProfile"),
+                    ) else listOf(ProtocolCriteriaValue(GraphQLBreakpointProtocol.operationNameFieldId, "GetProfile")),
                 ),
             )
             val rule = BreakpointRule(
@@ -54,6 +58,7 @@ class RulesRepositoryProtocolCriteriaTest {
 
             val restored = repository.rulesFlow.first { rules -> rules.any { it.id == rule.id } }.single()
             assertEquals(criteria, restored.protocolCriteria)
+            assertEquals(exact, registry.compile(restored.protocolCriteria)?.requiresExactEndpoint)
             assertEquals(rule.phase, restored.phase)
             assertEquals(BreakpointPortCriteria.Exact(8443), restored.portCriteria)
             assertTrue(coordinator.requirements.value.hasResponseRules)

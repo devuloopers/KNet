@@ -23,8 +23,11 @@ import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorTone
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.traffic.model.*
+import com.devuloopers.knet.ui.desktop.traffic.table.TrafficTable
 import java.awt.EventQueue
 import java.io.File
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlin.test.*
 
 /** Truthful protocol presentation and headless rendering without a running proxy, desktop app, or user database. */
@@ -99,6 +102,43 @@ class TrafficInspectorRedesignTest {
         val cancelled = base.copy(state = ExchangeState.CANCELLED,
             terminalOutcome = ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED))
         assertEquals(KNetInspectorTone.WARNING, present(cancelled, RequestKindId.GRPC).summary.metrics[0].tone)
+    }
+
+    @Test fun `capture pause keeps the HTTP result and labels the retained recording independently`() {
+        val outcome = ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Lifecycle.CAPTURE_PAUSED)
+        val paused = exchange(state = ExchangeState.CANCELLED).copy(terminalOutcome = outcome)
+        val metrics = present(paused).summary.metrics
+        assertEquals("200 Captured response", metrics.single { it.label == "HTTP status" }.value)
+        assertEquals("Paused", metrics.single { it.label == "Capture" }.value)
+        val beforeHeaders = present(paused.copy(response = null)).summary.metrics
+        assertEquals("Not captured", beforeHeaders.single { it.label == "HTTP status" }.value)
+        assertEquals("Paused", beforeHeaders.single { it.label == "Capture" }.value)
+        val response = requireNotNull(paused.response)
+        val sse = paused.copy(response = response.copy(head = response.head.copy(
+            headers = listOf(header("content-type", "text/event-stream")))))
+        assertEquals("Capture Paused", present(sse).summary.metrics.single { it.label == "State" }.value)
+        val disconnected = paused.copy(terminalOutcome = ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED))
+        assertEquals("Cancelled", present(disconnected).summary.metrics.single { it.label == "Status" }.value)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun `table shows the capture pause marker next to the HTTP status`() = EventQueue.invokeAndWait {
+        val row = exchange(state = ExchangeState.CANCELLED).copy(
+            terminalOutcome = ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Lifecycle.CAPTURE_PAUSED),
+        ).toTrafficRowUiState()
+        ImageComposeScene(1500, 340, Density(1.25f), coroutineContext = UnconfinedTestDispatcher(), content = { KNetTheme {
+            TrafficTable(listOf(row), null, false, {}, row.formattedSize, 1)
+        } }).use { scene ->
+            scene.frame()
+            fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
+            val nodes = scene.semanticsOwners.flatMap { descendants(it.unmergedRootSemanticsNode) }
+            val paused = assertNotNull(nodes.firstOrNull {
+                "Capture paused" in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()
+            }, "Expected the capture pause icon in the Traffic row")
+            val status = assertNotNull(nodes.firstOrNull { it.text() == "200" }, "Expected the captured HTTP status")
+            assertTrue(paused.boundsInRoot.width > 0 && status.boundsInRoot.width > 0)
+            assertEquals(paused.boundsInRoot.center.y, status.boundsInRoot.center.y, 2f)
+        }
     }
 
     @Test fun `websocket handshake state is distinct from connection lifetime and message count`() {

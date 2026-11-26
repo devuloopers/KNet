@@ -26,6 +26,10 @@ outstanding byte reservations, finalizes retained partial bodies and cancels unf
 records before their parent. This prevents stale In Progress records, post-pause body appends and
 temporary body writers surviving until an unrelated device stops.
 
+The Traffic table identifies the partial recording with a pause indicator and keeps any received HTTP
+status visible. The inspector reports capture state separately from a received HTTP status. If the pause
+preceded response headers, the status is shown as **Not captured**.
+
 Resume records subsequent complete requests or streams. Existing HTTP keep-alive/H2 connections can
 record their next exchange/stream. An already cut body, SSE response or WebSocket session stays cut;
 create a new request, subscription/stream or WebSocket connection to capture it again. KNet continues

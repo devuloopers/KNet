@@ -81,12 +81,18 @@ internal fun inspectorPresentation(row: TrafficRowUiState, prepared: InspectorPr
         else -> TrafficInspectorProtocol.HTTP
     }
     val outcome = row.terminalOutcome ?: exchange?.terminalOutcome
+    val capturePaused = outcome.isCapturePaused
     val status = exchange?.response?.head?.status?.code ?: row.status
     val statusText = exchange?.response?.head?.reasonPhrase ?: row.statusText
-    val httpValue = if (status > 0) "$status $statusText".trim() else if (outcome == null) "Pending" else "No response"
+    val httpValue = when {
+        status > 0 -> "$status $statusText".trim()
+        capturePaused -> "Not captured"
+        outcome == null -> "Pending"
+        else -> "No response"
+    }
     val httpTone = when { status in 200..299 -> KNetInspectorTone.SUCCESS; status in 400..599 -> KNetInspectorTone.ERROR
         status in 300..399 -> KNetInspectorTone.WARNING; else -> KNetInspectorTone.NEUTRAL }
-    val lifecycle = when (outcome) {
+    val lifecycle = if (capturePaused) outcome.toTrafficStatusLabel() else when (outcome) {
         is ExchangeTerminalOutcome.Failed -> "Failed"
         is ExchangeTerminalOutcome.Cancelled -> "Cancelled"
         is ExchangeTerminalOutcome.Dropped -> "Blocked"
@@ -115,6 +121,7 @@ internal fun inspectorPresentation(row: TrafficRowUiState, prepared: InspectorPr
             outcome is ExchangeTerminalOutcome.Cancelled || outcome is ExchangeTerminalOutcome.Dropped -> KNetInspectorTone.WARNING
             else -> KNetInspectorTone.SUCCESS
         })
+    val captureMetric = KNetInspectorMetric("Capture", "Paused", KNetInspectorTone.WARNING)
     val metrics = when (protocol) {
         TrafficInspectorProtocol.WEBSOCKET, TrafficInspectorProtocol.GRAPHQL_WEBSOCKET -> listOf(
             KNetInspectorMetric("State", if (status != 101 && (status > 0 || outcome == ExchangeTerminalOutcome.Completed) &&
@@ -125,8 +132,11 @@ internal fun inspectorPresentation(row: TrafficRowUiState, prepared: InspectorPr
         TrafficInspectorProtocol.SSE -> listOf(KNetInspectorMetric("State", lifecycle, lifecycleTone),
             KNetInspectorMetric("HTTP status", httpValue, httpTone), KNetInspectorMetric("Records", page.totalCount.toString()))
         TrafficInspectorProtocol.GRPC -> listOf(rpc, KNetInspectorMetric("HTTP status", httpValue, httpTone),
-            KNetInspectorMetric("Duration", row.formattedTime))
-        else -> listOf(KNetInspectorMetric("Status", if (outcome is ExchangeTerminalOutcome.Failed || outcome is ExchangeTerminalOutcome.Cancelled || outcome is ExchangeTerminalOutcome.Dropped) lifecycle else httpValue,
+            if (capturePaused) captureMetric else KNetInspectorMetric("Duration", row.formattedTime))
+        else -> if (capturePaused) listOf(
+            KNetInspectorMetric("HTTP status", httpValue, httpTone), captureMetric,
+            KNetInspectorMetric("Captured size", row.formattedSize),
+        ) else listOf(KNetInspectorMetric("Status", if (outcome is ExchangeTerminalOutcome.Failed || outcome is ExchangeTerminalOutcome.Cancelled || outcome is ExchangeTerminalOutcome.Dropped) lifecycle else httpValue,
             if (outcome is ExchangeTerminalOutcome.Failed) KNetInspectorTone.ERROR else if (outcome is ExchangeTerminalOutcome.Cancelled || outcome is ExchangeTerminalOutcome.Dropped) KNetInspectorTone.WARNING else httpTone),
             KNetInspectorMetric("Duration", row.formattedTime), KNetInspectorMetric("Size", row.formattedSize))
     }
@@ -172,7 +182,7 @@ internal fun inspectorPresentation(row: TrafficRowUiState, prepared: InspectorPr
             (exchange?.connectionId?.value ?: row.connectionId)?.let { add(KNetInspectorField("Connection ID", it, true)) }
             (exchange?.streamId?.value ?: row.streamId)?.let { add(KNetInspectorField("Stream ID", it.toString(), true)) }
             add(KNetInspectorField("Transport method", row.method, true))
-            if (protocol.streaming) add(KNetInspectorField("Duration", row.formattedTime))
+            if (protocol.streaming || capturePaused) add(KNetInspectorField("Duration", row.formattedTime))
             row.appliedNetworkCondition?.let { condition ->
                 add(KNetInspectorField("Network condition", condition.profileId, true))
                 condition.ruleId?.let { add(KNetInspectorField("Condition rule", it, true)) }
