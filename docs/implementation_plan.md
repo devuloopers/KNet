@@ -1,9 +1,18 @@
 # KNet Implementation Plan
 
-## Desktop 0.2.2 release [IN PROGRESS]
+## Desktop 0.2.2 release [COMPLETED]
 
-Prepare `desktop-v0.2.2` from the completed Traffic, Protected Traffic and persisted GraphQL changes.
-Run the existing CI and Desktop release workflows, verify the draft's native packages and publish it.
+The `devuloopers` account pushed and published Desktop 0.2.2 as Latest from `380e7f1e`.
+The release includes the Traffic, Protected Traffic and persisted GraphQL changes. [Desktop 0.2.2](https://github.com/devuloopers/KNet/releases/tag/desktop-v0.2.2)
+
+The Room regression now waits for the breakpoint coordinator to receive the saved rule, and the
+toolbar regression waits for the requested scroll position. Both passed on Ubuntu and Windows.
+The final tagged revision passed all 10 CI jobs and all 8 release jobs. The feature report recorded
+1,693 passing tests. [CI](https://github.com/devuloopers/KNet/actions/runs/45752391854) · [Desktop release](https://github.com/devuloopers/KNet/actions/runs/45752391296)
+
+All 13 native package digests match the attested `SHA256SUMS`. The Windows ZIP contains version
+0.2.2 and JetBrains Runtime 21.0.11. All 14 public download URLs returned HTTP 200 without credentials.
+The manifest SHA-256 is `78e35f5580dc947e1bdf1cf260ff537aed9a46fbd10503d730f796c100dd8717`.
 
 ## Protected Traffic on IPv4-only Windows [COMPLETED]
 

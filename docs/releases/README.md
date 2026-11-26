@@ -1,5 +1,9 @@
 # Product release preparation
 
+[Desktop 0.2.2](https://github.com/devuloopers/KNet/releases/tag/desktop-v0.2.2) is Latest. See the
+[release notes](desktop-0.2.2.md) and the [validation record](../implementation_plan.md#desktop-022-release-completed).
+Companion remains compatible at 0.2.0.
+
 Desktop 0.2.1 publication is recorded in [`qualification-0.2.1.md`](qualification-0.2.1.md), with changes in
 [`desktop-0.2.1.md`](desktop-0.2.1.md). Companion remains at 0.2.0 for this Desktop patch.
 
@@ -75,7 +79,7 @@ completes exceptionally without throwing from cleanup or retaining its connectio
 
 ## Published 0.2.1 evidence
 
-[Desktop 0.2.1](https://github.com/devuloopers/KNet/releases/tag/desktop-v0.2.1) is Latest, with 13 native
+[Desktop 0.2.1](https://github.com/devuloopers/KNet/releases/tag/desktop-v0.2.1) was published with 13 native
 packages and `SHA256SUMS`. Full CI, native packaging, provenance, package metadata and anonymous downloads
 passed. The [qualification report](qualification-0.2.1.md) records the exact source, workflows and manifest.
 Companion remains compatible at 0.2.0.
