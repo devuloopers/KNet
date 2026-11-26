@@ -25,6 +25,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.CaptureState
 import java.awt.EventQueue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlin.math.abs
 import kotlin.test.*
 
 /** Narrow windows retain file/capture actions in the theme's scroll lane without moving trailing controls. */
@@ -118,13 +119,26 @@ class TrafficFileActionsRenderTest {
                 labels.forEach { assertEquals(initialHeights.getValue(it), label(it).boundsInRoot.height) }
                 assertEquals(initialTop, label("Auto scroll").boundsInRoot.top)
                 val scroll = nodes().first { it.config.contains(SemanticsProperties.HorizontalScrollAxisRange) }
+                val range = scroll.config[SemanticsProperties.HorizontalScrollAxisRange]
                 val scrollBy = scroll.config[SemanticsActions.ScrollBy].action!!
+                fun scrollTo(offset: Float) {
+                    val target = offset.coerceIn(0f, range.maxValue())
+                    if (abs(target - range.value()) <= 1f) return
+                    assertTrue(scrollBy(target - range.value(), 0f))
+                    val deadline = System.nanoTime() + 2_000_000_000L
+                    while (abs(target - range.value()) > 1f && System.nanoTime() < deadline) {
+                        scene.render(time.also { time += 16_000_000 }).close()
+                        Thread.sleep(1)
+                    }
+                    assertEquals(target, range.value(), 1f, "Toolbar scroll did not settle at $density")
+                    frames()
+                }
                 val status = label(forwarding)
-                val hiddenWidth = status.positionInRoot.x + status.size.width - status.boundsInRoot.right
-                assertTrue(scrollBy(hiddenWidth.coerceAtLeast(0f), 0f))
-                frames()
+                // At the leading edge only the right end of the label can be clipped.
+                val hiddenWidth = status.size.width - status.boundsInRoot.width
+                scrollTo(range.value() + hiddenWidth.coerceAtLeast(0f))
                 assertForwardingFits()
-                assertTrue(scrollBy(10_000f, 0f)); frames()
+                scrollTo(range.maxValue())
                 assertTrue(label("Export (3)").boundsInRoot.height >= 12 * density.density)
                 assertTrue(label("Export (3)").boundsInRoot.right < label("Auto scroll").boundsInRoot.left)
             }
