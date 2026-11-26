@@ -17,7 +17,6 @@ import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class RulesRepositoryProtocolCriteriaTest {
     @Test fun `Room round trip preserves an extension-owned operation-name criterion`() = roundTrip(exact = false)
@@ -47,7 +46,7 @@ class RulesRepositoryProtocolCriteriaTest {
             )
             val rule = BreakpointRule(
                 id = "graphql-persisted",
-                urlPattern = "*graphql*",
+                urlPattern = if (exact) "https://api.example.test/graphql" else "*graphql*",
                 portCriteria = BreakpointPortCriteria.Exact(8443),
                 method = HttpMethod.POST,
                 phase = BreakpointPhase.RESPONSE,
@@ -59,9 +58,11 @@ class RulesRepositoryProtocolCriteriaTest {
             val restored = repository.rulesFlow.first { rules -> rules.any { it.id == rule.id } }.single()
             assertEquals(criteria, restored.protocolCriteria)
             assertEquals(exact, registry.compile(restored.protocolCriteria)?.requiresExactEndpoint)
+            assertEquals(rule.urlPattern, restored.urlPattern)
             assertEquals(rule.phase, restored.phase)
             assertEquals(BreakpointPortCriteria.Exact(8443), restored.portCriteria)
-            assertTrue(coordinator.requirements.value.hasResponseRules)
+            // The UI and coordinator collect separate Room flows. Await the runtime projection independently.
+            coordinator.requirements.first { it.hasResponseRules }
 
             val stored = database.breakpointRuleDao().getAllRules().single()
             assertEquals(GraphQLBreakpointProtocol.id.value, stored.protocolCriteriaType)

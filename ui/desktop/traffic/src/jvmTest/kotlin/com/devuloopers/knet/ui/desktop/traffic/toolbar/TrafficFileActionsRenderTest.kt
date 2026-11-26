@@ -23,15 +23,17 @@ import com.devuloopers.knet.connectivity.model.ProxyEndpointVersion
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.traffic.model.CaptureState
 import java.awt.EventQueue
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlin.test.*
 
 /** Narrow windows retain file/capture actions in the theme's scroll lane without moving trailing controls. */
-@OptIn(ExperimentalComposeUiApi::class, InternalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, InternalComposeUiApi::class, ExperimentalCoroutinesApi::class)
 class TrafficFileActionsRenderTest {
     @Test fun `import and selected export remain reachable with fixed auto scroll controls`() = EventQueue.invokeAndWait {
         for (width in listOf(900, 1440)) {
             var exported = false; var imported = false
-            ImageComposeScene(width, 100, content = { KNetTheme {
+            ImageComposeScene(width, 100, coroutineContext = UnconfinedTestDispatcher(), content = { KNetTheme {
                 TrafficToolbar(TrafficToolbarState(exportAvailable = true, selectedCount = 3),
                     TrafficToolbarActions(onImport = { imported = true }, onExport = { exported = true }),
                     networkConditionsControl = { Text("Conditions: Off", color = KNetTheme.colors.textSecondary, maxLines = 1, softWrap = false) })
@@ -74,7 +76,8 @@ class TrafficFileActionsRenderTest {
         val forwarding = "Forwarding · Capture paused ($ip:$port)"
         for (density in listOf(Density(1f), Density(1.25f, 1.2f), Density(2f))) {
             val width = mutableStateOf(900.dp)
-            ImageComposeScene((1800 * density.density).toInt(), (100 * density.density).toInt(), density, content = { KNetTheme {
+            ImageComposeScene((1800 * density.density).toInt(), (100 * density.density).toInt(), density,
+                coroutineContext = UnconfinedTestDispatcher(), content = { KNetTheme {
                 Column(Modifier.width(width.value)) {
                     TrafficToolbar(state,
                         TrafficToolbarActions(onImport = {}, onExport = {}),
@@ -118,10 +121,10 @@ class TrafficFileActionsRenderTest {
                 val scrollBy = scroll.config[SemanticsActions.ScrollBy].action!!
                 val status = label(forwarding)
                 val hiddenWidth = status.positionInRoot.x + status.size.width - status.boundsInRoot.right
-                scrollBy(hiddenWidth.coerceAtLeast(0f), 0f)
+                assertTrue(scrollBy(hiddenWidth.coerceAtLeast(0f), 0f))
                 frames()
                 assertForwardingFits()
-                scrollBy(10_000f, 0f); frames()
+                assertTrue(scrollBy(10_000f, 0f)); frames()
                 assertTrue(label("Export (3)").boundsInRoot.height >= 12 * density.density)
                 assertTrue(label("Export (3)").boundsInRoot.right < label("Auto scroll").boundsInRoot.left)
             }
